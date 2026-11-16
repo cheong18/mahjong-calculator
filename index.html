@@ -167,8 +167,8 @@
             </div>
 
             <!-- 複製按鈕 -->
-            <button onclick="shareReportHtml()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition shadow-sm">
-                📤 一鍵分享完整結算報告 (HTML)
+            <button id="share-btn" onclick="shareReportPdf()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition shadow-sm disabled:opacity-60">
+                📤 一鍵分享完整結算報告 (PDF)
             </button>
             <button onclick="copyReport()" class="w-full text-slate-500 text-sm underline">只複製文字摘要</button>
         </div>
@@ -238,6 +238,8 @@
 
     <input type="file" id="photo-input" accept="image/*" class="hidden">
 
+    <script src="vendor/html2canvas.min.js"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
     <script>
         const STORAGE_KEY = 'mahjong-calc-v1';
         const AV_COLORS = [
@@ -1338,35 +1340,90 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
 <footer>由「麻雀與食飯抽水結算系統」產生</footer></div></body></html>`;
         }
 
-        async function shareReportHtml() {
-            calculate();
-            const now = new Date(), pad = n => String(n).padStart(2, '0');
-            const name = `麻雀結算報告_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.html`;
+        // 將報告 HTML 渲染成 PDF (A4 多頁，盡量喺卡片／行之間分頁)
+        async function buildReportPdf() {
             const html = buildReportHtml();
-            const blob = new Blob([html], { type: 'text/html' });
-            const file = new File([blob], name, { type: 'text/html' });
-            // iPhone App (Capacitor)：寫入暫存檔，再用系統分享選單傳出
-            const cap = window.Capacitor;
-            if (cap && cap.isNativePlatform && cap.isNativePlatform() && cap.registerPlugin) {
-                try {
-                    const Fs = cap.Plugins.Filesystem || cap.registerPlugin('Filesystem');
-                    const Sh = cap.Plugins.Share || cap.registerPlugin('Share');
-                    const w = await Fs.writeFile({ path: name, data: html, directory: 'CACHE', encoding: 'utf8' });
-                    await Sh.share({ title: '麻雀結算報告', url: w.uri });
-                } catch (e) { if (!(e && /cancel/i.test(String(e.message || e)))) alert('分享失敗：' + (e && e.message ? e.message : e)); }
-                return;
-            }
+            const W = 760, SCALE = 2;
+            const frame = document.createElement('iframe');
+            frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${W}px;height:1000px;border:0;visibility:hidden`;
+            document.body.appendChild(frame);
             try {
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ files: [file], title: '麻雀結算報告' });
+                await new Promise(res => { frame.onload = res; frame.srcdoc = html; });
+                const doc = frame.contentDocument;
+                await Promise.all(Array.from(doc.images).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+                frame.style.height = doc.documentElement.scrollHeight + 'px';
+                await new Promise(r => setTimeout(r, 50));
+                const body = doc.body;
+                const total = Math.max(body.scrollHeight, doc.documentElement.scrollHeight);
+                // 可以分頁嘅位置 (各元素底部)
+                const cuts = Array.from(doc.querySelectorAll('.card, .seat, tr, .unit, .row, li')).map(el => Math.round(el.getBoundingClientRect().bottom + doc.defaultView.scrollY));
+                cuts.sort((a, b) => a - b);
+                const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#f8fafc', width: W, windowWidth: W, useCORS: true, logging: false });
+                const pageH = Math.floor(W * 297 / 210);   // CSS px
+                const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                let y = 0, first = true;
+                while (y < total - 1) {
+                    let end = y + pageH;
+                    if (end < total) {
+                        const ok = cuts.filter(c => c > y + pageH * 0.5 && c <= end);
+                        if (ok.length) end = ok[ok.length - 1];
+                    } else end = total;
+                    const sliceH = Math.max(1, Math.round((end - y) * SCALE));
+                    const part = document.createElement('canvas');
+                    part.width = canvas.width; part.height = sliceH;
+                    const ctx = part.getContext('2d');
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, part.width, part.height);
+                    ctx.drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+                    if (!first) pdf.addPage();
+                    first = false;
+                    pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 210 * sliceH / canvas.width);
+                    y = end;
+                }
+                return pdf;
+            } finally {
+                frame.remove();
+            }
+        }
+
+        async function shareReportPdf() {
+            const btn = document.getElementById('share-btn');
+            const old = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ 製作 PDF 中…'; }
+            try {
+                calculate();
+                const now = new Date(), pad = n => String(n).padStart(2, '0');
+                const name = `麻雀結算報告_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.pdf`;
+                const pdf = await buildReportPdf();
+                // iPhone App (Capacitor)：寫入暫存檔，再用系統分享選單傳出
+                const cap = window.Capacitor;
+                if (cap && cap.isNativePlatform && cap.isNativePlatform() && cap.registerPlugin) {
+                    try {
+                        const Fs = cap.Plugins.Filesystem || cap.registerPlugin('Filesystem');
+                        const Sh = cap.Plugins.Share || cap.registerPlugin('Share');
+                        const b64 = pdf.output('datauristring').split(',')[1];
+                        const w = await Fs.writeFile({ path: name, data: b64, directory: 'CACHE' });
+                        await Sh.share({ title: '麻雀結算報告', url: w.uri });
+                    } catch (e) { if (!(e && /cancel/i.test(String(e.message || e)))) alert('分享失敗：' + (e && e.message ? e.message : e)); }
                     return;
                 }
-            } catch (e) { if (e && e.name === 'AbortError') return; /* 其他錯誤就改用下載 */ }
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = name;
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+                const blob = pdf.output('blob');
+                const file = new File([blob], name, { type: 'application/pdf' });
+                try {
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: '麻雀結算報告' });
+                        return;
+                    }
+                } catch (e) { if (e && e.name === 'AbortError') return; /* 其他錯誤就改用下載 */ }
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            } catch (e) {
+                alert('製作 PDF 失敗：' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = old; }
+            }
         }
 
         // ---------- 資料管理 ----------
