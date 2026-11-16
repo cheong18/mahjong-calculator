@@ -1285,46 +1285,46 @@
                 const multi = all.length > 1;
                 return `<div class="unit"><div class="unit-top">${rptAv(all[0], 64)}</div>
                     <div class="unit-name">${esc(groupName(gid, gm))}${multi ? ' 組' : ''}</div>
-                    ${multi ? all.map((m, i) => `<div class="mem">${rptAv(m, 24)}<span>${i === 0 ? '👑' : ''}${esc(nameOf(m))}</span></div>`).join('') : ''}
+                    ${multi ? all.map((m, i) => `<div class="mem">${rptAv(m, 30)}<span>${i === 0 ? '👑' : ''}${esc(nameOf(m))}</span></div>`).join('') : ''}
                     <div class="loc">${esc(locationOf(all[0]))}</div></div>`;
             }).join('');
 
-            const pureHtml = S.pureDinners.map(P).filter(named).map(p => `<span class="chip">${rptAv(p, 28)}${esc(nameOf(p))}</span>`).join('') || '<span class="muted">（無）</span>';
-            const paidHtml = S.paidDinners.filter(r => named(P(r.personId))).map(r => `<div class="row"><span class="chip">${rptAv(P(r.personId), 28)}${esc(nameOf(P(r.personId)))}</span><b>$${r.amount.toFixed(2)}</b></div>`).join('') || '<span class="muted">（無記錄）</span>';
+            const pureHtml = S.pureDinners.map(P).filter(named).map(p => `<span class="chip">${rptAv(p, 34)}${esc(nameOf(p))}</span>`).join('') || '<span class="muted">（無）</span>';
+            const paidHtml = S.paidDinners.filter(r => named(P(r.personId))).map(r => `<div class="row"><span class="chip">${rptAv(P(r.personId), 34)}${esc(nameOf(P(r.personId)))}</span><b>$${r.amount.toFixed(2)}</b></div>`).join('') || '<span class="muted">（無記錄）</span>';
             const modeLabel = S.dinnerMode === 'subsidy' ? '參與抽水補貼' : '無抽水補貼（純計飯錢）';
 
             const tablesHtml = S.tables.map((t, ti) => `
                 <div class="card inner"><div class="row"><h3>第 ${ti + 1} 台</h3><span class="muted">抽水：$${(+t.commission).toFixed(2)}</span></div>
-                ${t.seats.map(s => { const p = P(s.personId); return `<div class="seat ${s.sub ? 'sub' : ''}">${rptAv(p, 40)}<span class="grow">${esc(nameOf(p))}${s.sub ? ' <span class="muted">(換人時段)</span>' : ''}</span><b class="${cls(s.wl)}">${money(s.wl, true)}</b></div>`; }).join('')}
+                ${t.seats.map(s => { const p = P(s.personId); return `<div class="seat ${s.sub ? 'sub' : ''}">${rptAv(p, 46)}<span class="grow">${esc(nameOf(p))}${s.sub ? ' <span class="muted">(換人時段)</span>' : ''}</span><b class="${cls(s.wl)}">${money(s.wl, true)}</b></div>`; }).join('')}
                 ${c.tableErrors[ti] ? `<div class="err">${esc(c.tableErrors[ti])}</div>` : ''}</div>`).join('') || '<span class="muted">（未有麻雀台）</span>';
 
             let rows = '';
             c.results.forEach((r, id) => {
                 const p = P(id), members = gm.get(p.groupId) || [];
                 const tag = members.length > 1 ? `<div class="tag">${esc(groupName(p.groupId, gm))} 組</div>` : '';
-                rows += `<tr><td><span class="nm">${rptAv(p, 36)}<span><div>${esc(nameOf(p))}</div>${tag}</span></span></td>
-                    <td class="${cls(r.wl)}">${money(r.wl, true)}</td><td>-${r.share.toFixed(2)}</td><td class="ind">+${r.paid.toFixed(2)}</td>
-                    <td class="r ${cls(r.net)}"><b>${money(r.net, true)}</b></td></tr>`;
+                rows += `<div class="pc"><div class="pc-top"><span class="nm">${rptAv(p, 48)}<span><div class="pname">${esc(nameOf(p))}</div>${tag}</span></span><b class="big ${cls(r.net)}">${money(r.net, true)}</b></div>
+                    <div class="pc-sub"><span>贏輸 <b class="${cls(r.wl)}">${money(r.wl, true)}</b></span><span>飯錢分擔 <b>-${r.share.toFixed(2)}</b></span><span>已付飯錢 <b class="ind">+${r.paid.toFixed(2)}</b></span></div></div>`;
             });
 
             const groupsHtml = L.groups.map(g => {
                 const multi = g.members.length > 1;
-                return `<div class="row top"><span class="nm">${rptAv(g.members[0], 40)}<span><b>${esc(g.label)}${multi ? ' 組' : ''}</b>${multi ? g.members.map(m => `<div class="mem small">${rptAv(m, 20)}<span>${m.id === g.capId ? '👑' : ''}${esc(nameOf(m))} · ${esc(locationOf(m))}</span></div>`).join('') : ''}</span></span><b class="${cls(g.net)}">${money(g.net, true)}</b></div>`;
+                return `<div class="row top"><span class="nm">${rptAv(g.members[0], 48)}<span><b>${esc(g.label)}${multi ? ' 組' : ''}</b>${multi ? g.members.map(m => `<div class="mem small">${rptAv(m, 26)}<span>${m.id === g.capId ? '👑' : ''}${esc(nameOf(m))} · ${esc(locationOf(m))}</span></div>`).join('') : ''}</span></span><b class="${cls(g.net)}">${money(g.net, true)}</b></div>`;
             }).join('') || '<span class="muted">未有結算資料。</span>';
             const txHtml = L.txs.length ? L.txs.map(t => `<li><b>${esc(t.from)}</b> 付 <b class="pos">$${t.amount.toFixed(2)}</b> 給 👉 <b>${esc(t.to)}</b></li>`).join('') : '<li class="muted">目前所有人結算平衡，無需轉賬。</li>';
 
-            const css = `*{box-sizing:border-box}body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Noto Sans TC",sans-serif;line-height:1.5}
-.wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;margin-top:16px}.inner{background:#f8fafc;margin-top:12px;padding:12px}
-h1{text-align:center;font-size:22px;margin:0}h1+p{text-align:center;color:#64748b;margin:4px 0 0;font-size:13px}h2{font-size:17px;margin:0 0 12px}h3{font-size:14px;margin:0}
-.muted{color:#94a3b8;font-size:13px}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}.row.top{align-items:flex-start}.grow{flex:1}
-.av{display:inline-flex;align-items:center;justify-content:center;font-weight:600}.chip{display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border-radius:999px;padding:3px 10px 3px 3px;margin:2px;font-size:14px}
-.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}.unit{text-align:center;padding:8px;border:1px solid #e2e8f0;border-radius:12px}.unit-top{display:flex;justify-content:center}.unit-name{font-size:14px;font-weight:600;margin-top:4px}.loc{font-size:11px;color:#94a3b8}
-.mem{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;margin-top:4px}.mem.small{font-size:11px}.nm{display:inline-flex;align-items:center;gap:8px}.tag{font-size:11px;color:#4f46e5;font-weight:400}
-.seat{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:6px 10px;margin-top:6px}.seat.sub{margin-left:16px;border-left:2px solid #c7d2fe}
-.pos{color:#059669}.neg{color:#e11d48}.zero{color:#64748b}.ind{color:#4f46e5}.err{background:#fef2f2;border-left:4px solid #ef4444;color:#b91c1c;font-size:13px;padding:8px;border-radius:8px;margin-top:8px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}.stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.stat small{display:block;color:#64748b;font-size:11px}.stat b{font-size:17px}
-.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}th{background:#f1f5f9;color:#475569;font-size:12px;text-align:left;padding:8px}td{padding:8px;border-bottom:1px solid #f1f5f9}th.r,td.r{text-align:right}
-.pay{background:#eef2ff;border-color:#c7d2fe}ul{padding:0;list-style:none;margin:12px 0 0;border-top:1px solid #c7d2fe;padding-top:10px}li{margin:8px 0}footer{text-align:center;color:#94a3b8;font-size:12px;margin-top:20px}`;
+            const css = `*{box-sizing:border-box}body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Noto Sans TC",sans-serif;line-height:1.5;font-size:17px}
+.wrap{padding:16px 12px 28px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin-top:14px}.inner{background:#f8fafc;margin-top:12px;padding:12px}
+h1{text-align:center;font-size:24px;margin:0;line-height:1.3}h1+p{text-align:center;color:#64748b;margin:6px 0 0;font-size:16px}h2{font-size:21px;margin:0 0 12px}h3{font-size:19px;margin:0}
+.muted{color:#94a3b8;font-size:15px}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0;font-size:18px}.row.top{align-items:flex-start}.grow{flex:1}
+.av{display:inline-flex;align-items:center;justify-content:center;font-weight:600}.chip{display:inline-flex;align-items:center;gap:8px;background:#f1f5f9;border-radius:999px;padding:4px 14px 4px 4px;margin:3px;font-size:18px}
+.units{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.unit{text-align:center;padding:12px 8px;border:1px solid #e2e8f0;border-radius:14px}.unit-top{display:flex;justify-content:center}.unit-name{font-size:19px;font-weight:600;margin-top:6px}.loc{font-size:15px;color:#94a3b8;margin-top:2px}
+.mem{display:flex;align-items:center;gap:8px;font-size:16px;color:#64748b;margin-top:6px;text-align:left}.mem.small{font-size:15px}.nm{display:inline-flex;align-items:center;gap:10px}.tag{font-size:15px;color:#4f46e5;font-weight:400}
+.seat{display:flex;align-items:center;gap:12px;background:#fff;border-radius:12px;padding:8px 12px;margin-top:8px;font-size:19px}.seat.sub{margin-left:14px;border-left:3px solid #c7d2fe}
+.pos{color:#059669}.neg{color:#e11d48}.zero{color:#64748b}.ind{color:#4f46e5}.err{background:#fef2f2;border-left:4px solid #ef4444;color:#b91c1c;font-size:16px;padding:10px;border-radius:8px;margin-top:10px}
+.stats{display:grid;grid-template-columns:1fr;gap:8px;text-align:center}.stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.stat small{display:block;color:#64748b;font-size:15px}.stat b{font-size:24px}
+.pc{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-top:10px}.pc-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.pname{font-size:20px;font-weight:600}.big{font-size:26px}
+.pc-sub{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:16px;color:#64748b}.pc-sub b{font-weight:600}
+.pay{background:#eef2ff;border-color:#c7d2fe}ul{padding:0;list-style:none;margin:14px 0 0;border-top:1px solid #c7d2fe;padding-top:12px}li{margin:12px 0;font-size:20px;line-height:1.6}footer{text-align:center;color:#94a3b8;font-size:14px;margin-top:20px}`;
 
             return `<!DOCTYPE html><html lang="zh-HK"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>麻雀與食飯結算報告 ${dateStr}</title><style>${css}</style></head><body><div class="wrap">
 <h1>🀄 麻雀與食飯抽水結算報告</h1><p>報告日期：${dateStr}</p>
@@ -1335,7 +1335,7 @@ h1{text-align:center;font-size:22px;margin:0}h1+p{text-align:center;color:#64748
 <div class="card"><h2>📊 最終結算報告</h2>
 <div class="stats"><div class="stat"><small>總抽水金額</small><b>$${c.totalCommission.toFixed(2)}</b></div><div class="stat"><small>總食飯支出</small><b>$${c.totalDinner.toFixed(2)}</b></div><div class="stat"><small>抽水扣除後差額</small><b>$${c.balanceDiff.toFixed(2)}</b><small>${c.balanceDiff > 0 ? '(需額外分擔)' : '(抽水有突)'}</small></div></div>
 ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` : ''}
-<div class="scroll" style="margin-top:14px"><table><thead><tr><th>名字</th><th>贏輸</th><th>飯錢分擔</th><th>已付飯錢</th><th class="r">最終結果 (收/付)</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+<p class="muted" style="margin:12px 0 0">右邊大字 = 最終結果（+ 收 / − 付）</p>${rows}</div>
 <div class="card pay"><h2>💸 建議找數方式</h2>${groupsHtml}<ul>${txHtml}</ul></div>
 <footer>由「麻雀與食飯抽水結算系統」產生</footer></div></body></html>`;
         }
@@ -1343,7 +1343,7 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
         // 將報告 HTML 渲染成 PDF (A4 多頁，盡量喺卡片／行之間分頁)
         async function buildReportPdf() {
             const html = buildReportHtml();
-            const W = 760, SCALE = 2;
+            const W = 390, SCALE = 3;
             const frame = document.createElement('iframe');
             frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${W}px;height:1000px;border:0;visibility:hidden`;
             document.body.appendChild(frame);
@@ -1356,11 +1356,11 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
                 const body = doc.body;
                 const total = Math.max(body.scrollHeight, doc.documentElement.scrollHeight);
                 // 可以分頁嘅位置 (各元素底部)
-                const cuts = Array.from(doc.querySelectorAll('.card, .seat, tr, .unit, .row, li')).map(el => Math.round(el.getBoundingClientRect().bottom + doc.defaultView.scrollY));
+                const cuts = Array.from(doc.querySelectorAll('.card, .seat, .pc, .unit, .row, li')).map(el => Math.round(el.getBoundingClientRect().bottom + doc.defaultView.scrollY));
                 cuts.sort((a, b) => a - b);
                 const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#f8fafc', width: W, windowWidth: W, useCORS: true, logging: false });
-                const pageH = Math.floor(W * 297 / 210);   // CSS px
-                const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                const pageH = 800;   // CSS px：近似手機螢幕比例
+                const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: [W, pageH], orientation: 'portrait' });
                 let y = 0, first = true;
                 while (y < total - 1) {
                     let end = y + pageH;
@@ -1376,7 +1376,8 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
                     ctx.drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
                     if (!first) pdf.addPage();
                     first = false;
-                    pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 210 * sliceH / canvas.width);
+                    pdf.setFillColor(248, 250, 252); pdf.rect(0, 0, W, pageH, 'F');
+                    pdf.addImage(part.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, W, W * sliceH / canvas.width);
                     y = end;
                 }
                 return pdf;
@@ -1392,7 +1393,8 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
             try {
                 calculate();
                 const now = new Date(), pad = n => String(n).padStart(2, '0');
-                const name = `麻雀結算報告_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.pdf`;
+                // 檔名用純英數字，避免部分 App (例如 WhatsApp) 處理中文檔名出錯
+                const name = `Mahjong-Report_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.pdf`;
                 const pdf = await buildReportPdf();
                 // iPhone App (Capacitor)：寫入暫存檔，再用系統分享選單傳出
                 const cap = window.Capacitor;
@@ -1402,7 +1404,7 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
                         const Sh = cap.Plugins.Share || cap.registerPlugin('Share');
                         const b64 = pdf.output('datauristring').split(',')[1];
                         const w = await Fs.writeFile({ path: name, data: b64, directory: 'CACHE' });
-                        await Sh.share({ title: '麻雀結算報告', url: w.uri });
+                        await Sh.share({ files: [w.uri] });
                     } catch (e) { if (!(e && /cancel/i.test(String(e.message || e)))) alert('分享失敗：' + (e && e.message ? e.message : e)); }
                     return;
                 }
