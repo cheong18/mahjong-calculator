@@ -2,17 +2,41 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>麻雀耍樂與食飯費用結算系統 (支援中途換人)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>麻雀與食飯抽水結算系統</title>
+    <link rel="stylesheet" href="tailwind.css">
+    <style>
+        body.py-8 { padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.75rem)); padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+        /* 16px 以上，避免 iPhone 撳輸入框時自動放大畫面 */
+        input, select { font-size: 16px; }
+        /* 人員格仔：長按拖拉 */
+        .unit { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; cursor: grab; transition: transform .12s, box-shadow .12s; }
+        .unit img { pointer-events: none; -webkit-user-drag: none; }
+        .unit.dragging-src { opacity: .3; }
+        .unit.drop-target { box-shadow: 0 0 0 3px #6366f1; background: #eef2ff; transform: scale(1.04); }
+        /* 圓形 + 新增掣 */
+        .plus-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 9999px; background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+        .plus-btn:active { background: #4338ca; }
+        .plus-btn svg { width: 20px; height: 20px; }
+        .plus-btn.plus-sm { width: 28px; height: 28px; }
+        .plus-btn.plus-sm svg { width: 16px; height: 16px; }
+        .plus-btn.plus-lg { width: 72px; height: 72px; }
+        .plus-btn.plus-lg svg { width: 36px; height: 36px; }
+        /* 個人明細表：左右捲動時鎖死最左邊名字欄 */
+        #summary-table th:first-child, #summary-table td:first-child { position: sticky; left: 0; box-shadow: 2px 0 4px -2px rgba(0,0,0,.18); }
+        #summary-table th:first-child { z-index: 2; background: #f1f5f9; }
+        #summary-table td:first-child { z-index: 1; background: #fff; }
+        #summary-table tr:hover td:first-child { background: #f8fafc; }
+        #drag-ghost { position: fixed; z-index: 70; pointer-events: none; opacity: .92; transform: scale(1.1); box-shadow: 0 10px 25px rgba(0,0,0,.25); background: #fff; border-radius: 12px; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6">
     <div class="max-w-4xl mx-auto space-y-6">
-        
+
         <!-- 標題 -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-            <h1 class="text-2xl font-bold text-slate-900">🀄 麻雀耍樂與食飯費用結算系統</h1>
-            <p class="text-sm text-slate-500 mt-1">支援中途換人/分段結算、每台零和校驗、自動飯費及找數路徑</p>
+            <h1 class="text-2xl font-bold text-slate-900">🀄️麻雀與食飯抽水結算系統</h1>
+            <p class="text-sm text-slate-500 mt-1">支援中途換人、抽水計飯錢同結算</p>
         </div>
 
         <!-- 錯誤警告容器 -->
@@ -23,21 +47,42 @@
             </div>
         </div>
 
+        <!-- 人員設定 -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-800">🐷人數設定</h2>
+                <p class="text-xs text-slate-500 mt-1.5">定好人數後，可以個人或組別結算</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-50 rounded-xl border p-3 text-center">
+                    <div class="text-xs text-slate-500">麻雀枱數</div>
+                    <div id="stat-tables" class="text-xl font-bold text-slate-800 mt-0.5">0</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl border p-3 text-center">
+                    <div class="text-xs text-slate-500">齋食飯人數</div>
+                    <div id="stat-diners" class="text-xl font-bold text-slate-800 mt-0.5">0</div>
+                </div>
+            </div>
+            <p class="text-sm text-slate-600">總人數：<span id="stat-people" class="font-bold text-slate-800">0</span> 人</p>
+
+            <div id="people-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1"></div>
+        </div>
+
         <!-- 設定區 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- 淨係食飯設定 -->
+            <!-- 齋食飯名單 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                <h2 class="text-lg font-semibold text-slate-800 mb-3">🍲 淨係食飯成員設定</h2>
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold text-slate-800">🍲 齋食飯名單</h2>
+                    <button onclick="openPureDinnerPicker()" class="plus-btn" title="由人員名單加入" aria-label="由人員名單加入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                </div>
                 <div class="space-y-3">
+                    <div id="pure-dinners-container" class="flex flex-wrap gap-2"></div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">淨係食飯人員名單 (用逗號隔開)</label>
-                        <input type="text" id="pure-dinners" value="Homan" class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" oninput="calculate()">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">淨係食飯者之飯錢計算方式</label>
-                        <select id="dinner-mode" class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" onchange="calculate()">
-                            <option value="subsidy">參與抽水補貼 (平分剩餘差額)</option>
-                            <option value="pure">純粹計算實際均分飯錢 (不參與抽水補貼)</option>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">飯錢計算方法</label>
+                        <select id="dinner-mode" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" onchange="changeDinnerMode(this.value)">
+                            <option value="subsidy">參與抽水補貼</option>
+                            <option value="pure">無抽水補貼（純計飯錢）</option>
                         </select>
                     </div>
                 </div>
@@ -47,9 +92,9 @@
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="text-lg font-semibold text-slate-800">💰 已付食飯錢記錄</h2>
-                    <button onclick="addPaidDinnerRow()" class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-xl font-medium hover:bg-indigo-100">+ 新增記錄</button>
+                    <button onclick="addPaidDinnerRow()" class="plus-btn" title="新增記錄" aria-label="新增記錄"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
                 </div>
-                <div id="paid-dinners-container" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <div id="paid-dinners-container" class="space-y-2 max-h-52 overflow-y-auto pr-1">
                     <!-- 動態加入 -->
                 </div>
                 <div class="mt-3 pt-2 border-t flex justify-between items-center text-sm font-semibold">
@@ -61,12 +106,12 @@
 
         <!-- 麻雀台數管理 (支援中途換人) -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-4 gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-slate-800">🀄 麻雀台資料 (含中途換人/分段)</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">如果有人中途換人，可以直接新增該座位嘅不同打牌時段與贏輸</p>
+                    <p class="text-xs text-slate-500 mt-0.5">中途換人撳 🔄，揀接替嘅人。</p>
                 </div>
-                <button onclick="addTable()" class="bg-indigo-600 text-white text-xs px-4 py-2 rounded-xl font-medium hover:bg-indigo-700 shadow-sm">+ 新增麻雀台</button>
+                <button onclick="addTable()" class="plus-btn" title="新增麻雀台" aria-label="新增麻雀台"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
             </div>
             <div id="tables-container" class="space-y-6">
                 <!-- 動態麻雀台 -->
@@ -76,7 +121,7 @@
         <!-- 結算結果 -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
             <h2 class="text-lg font-semibold text-slate-800 border-b pb-2">📊 最終結算報告</h2>
-            
+
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                 <div class="bg-slate-50 p-4 rounded-xl border">
                     <div class="text-xs text-slate-500">總抽水金額</div>
@@ -94,11 +139,11 @@
 
             <!-- 個人明細表格 -->
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-sm">
+                <table id="summary-table" class="w-full text-left border-collapse text-sm">
                     <thead>
                         <tr class="bg-slate-100 text-slate-600 text-xs uppercase">
                             <th class="p-3 rounded-l-xl">名字</th>
-                            <th class="p-3">贏輸狀態 (累計)</th>
+                            <th class="p-3">贏輸</th>
                             <th class="p-3">飯錢分擔</th>
                             <th class="p-3">已付飯錢</th>
                             <th class="p-3 rounded-r-xl text-right">最終結果 (收/付)</th>
@@ -110,10 +155,13 @@
                 </table>
             </div>
 
-            <!-- 找數路徑 -->
-            <div class="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
-                <h3 class="font-semibold text-indigo-900">💸 建議找數路徑 (誰付給誰)</h3>
-                <ul id="transactions-list" class="space-y-2 text-sm text-slate-700">
+            <!-- 找數路徑 (以組別計) -->
+            <div class="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-4">
+                <div>
+                    <h3 class="font-semibold text-indigo-900">💸 建議找數方式</h3>
+                </div>
+                <div id="group-balances" class="space-y-1.5 text-sm"></div>
+                <ul id="transactions-list" class="space-y-2 text-sm text-slate-700 pt-3 border-t border-indigo-100">
                     <!-- 動態插入 -->
                 </ul>
             </div>
@@ -124,346 +172,1103 @@
             </button>
         </div>
 
+        <!-- 資料管理 -->
+        <div class="flex justify-center gap-4 text-xs text-slate-400">
+            <button onclick="loadSample()" class="underline">還原範例資料</button>
+            <button onclick="clearAll()" class="underline">清空全部</button>
+        </div>
+
     </div>
 
+    <!-- 確認視窗 -->
+    <div id="confirm" class="hidden fixed inset-0 z-[60] bg-black/40 items-end sm:items-center justify-center">
+        <div class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));">
+            <h3 id="confirm-title" class="font-semibold text-slate-800 mb-1"></h3>
+            <p id="confirm-msg" class="text-sm text-slate-500 mb-4"></p>
+            <div class="flex gap-2">
+                <button onclick="closeConfirm()" class="flex-1 py-2.5 rounded-xl border text-slate-600">取消</button>
+                <button id="confirm-ok" onclick="confirmOk()" class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-medium">刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 點選人員視窗 -->
+    <div id="picker" class="hidden fixed inset-0 z-50 bg-black/40 items-end sm:items-center justify-center">
+        <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl p-5 max-h-[80vh] flex flex-col" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));">
+            <div class="flex justify-between items-center mb-1">
+                <h3 id="picker-title" class="font-semibold text-slate-800"></h3>
+                <button onclick="closePicker()" class="text-slate-400 text-xl px-2">✕</button>
+            </div>
+            <p id="picker-hint" class="text-xs text-slate-500 mb-3"></p>
+            <div id="picker-grid" class="grid grid-cols-3 gap-3 overflow-y-auto pb-2"></div>
+            <div id="picker-footer" class="pt-3 border-t flex gap-2">
+                <button onclick="closePicker()" class="flex-1 py-2.5 rounded-xl border text-slate-600">取消</button>
+                <button id="picker-ok" onclick="pickerConfirm()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium disabled:opacity-40">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯人員 / 組別視窗 -->
+    <div id="sheet" class="hidden fixed inset-0 z-50 bg-black/40 items-end sm:items-center justify-center" onclick="if (event.target === this) closeSheet()">
+        <div id="sheet-body" class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));"></div>
+    </div>
+
+    <!-- 調整相片視窗 -->
+    <div id="cropper" class="hidden fixed inset-0 z-[60] bg-black/60 items-end sm:items-center justify-center">
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));">
+            <h3 class="font-semibold text-slate-800 mb-1">調整相片</h3>
+            <p class="text-xs text-slate-500 mb-3">拖動相片移位，雙指或下面滑桿縮放，圓形範圍內就係頭像。</p>
+            <div class="flex justify-center">
+                <div class="relative overflow-hidden rounded-xl bg-slate-200 select-none">
+                    <canvas id="crop-canvas" style="display:block; touch-action:none;"></canvas>
+                    <div class="absolute inset-0 pointer-events-none rounded-full" style="box-shadow: 0 0 0 999px rgba(0,0,0,.45);"></div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 mt-4">
+                <span class="text-xs text-slate-500">縮放</span>
+                <input id="crop-zoom" type="range" min="1" max="5" step="0.01" value="1" class="flex-1" oninput="cropZoom(this.value)">
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="cropCancel()" class="px-4 py-2.5 rounded-xl border text-slate-600">取消</button>
+                <button onclick="cropConfirm()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="photo-input" accept="image/*" class="hidden">
+
     <script>
-        // 初始化預設數據
-        let paidDinnersData = [
-            { name: "Sam", amount: 41 },
-            { name: "Ada", amount: 5 }
+        const STORAGE_KEY = 'mahjong-calc-v1';
+        const AV_COLORS = [
+            'bg-rose-100 text-rose-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700',
+            'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700', 'bg-teal-100 text-teal-700',
+            'bg-orange-100 text-orange-700', 'bg-pink-100 text-pink-700'
         ];
-
-        let tablesData = [
-            {
-                id: 1,
-                commission: 11.5,
-                players: [
-                    { name: "Sam", wl: -2.5 },
-                    { name: "Eddie", wl: 0 },
-                    { name: "Garry", wl: -20 },
-                    { name: "Janet", wl: 11 }
-                ]
-            },
-            {
-                id: 2,
-                commission: 12.5,
-                players: [
-                    { name: "Ada", wl: -10.5 },
-                    { name: "Agnes", wl: -14.5 },
-                    { name: "Michelle", wl: -0.5 },
-                    { name: "Venus", wl: 13 }
-                ]
-            }
-        ];
-
-        window.onload = function() {
-            renderPaidDinners();
-            renderTables();
-            calculate();
+        // 頭像大細：全部地方統一放大一半 (xl 亦係人數名單用嘅大細)
+        const AV_SIZE = {
+            xs: 'w-9 h-9 text-base', sm: 'w-14 h-14 text-xl',
+            lg: 'w-[72px] h-[72px] text-2xl', xl: 'w-24 h-24 text-4xl'
         };
 
-        function renderPaidDinners() {
-            const container = document.getElementById('paid-dinners-container');
-            container.innerHTML = '';
-            paidDinnersData.forEach((item, index) => {
-                container.innerHTML += `
-                    <div class="flex items-center space-x-2">
-                        <input type="text" value="${item.name}" placeholder="姓名" class="w-1/2 px-3 py-1.5 border rounded-xl text-sm" oninput="updatePaidDinner(${index}, 'name', this.value)">
-                        <input type="number" value="${item.amount}" placeholder="金額" class="w-1/3 px-3 py-1.5 border rounded-xl text-sm" oninput="updatePaidDinner(${index}, 'amount', this.value)">
-                        <button onclick="removePaidDinner(${index})" class="text-red-500 hover:text-red-700 px-2 font-bold">×</button>
-                    </div>
-                `;
-            });
+        let S;                 // 全部資料
+        let photoTarget = null;
+        let pk = null;         // 點選視窗狀態
+
+        // ---------- 資料 ----------
+        function emptyState() {
+            return { seq: 1, people: [], tables: [], pureDinners: [], paidDinners: [], dinnerMode: 'subsidy' };
+        }
+        function uid(prefix) { return prefix + (S.seq++); }
+        function seat(personId, wl, sub) { return { personId: personId, wl: wl, sub: !!sub }; }
+        function addPerson(name) {
+            const id = uid('p');
+            S.people.push({ id: id, name: name || '', photo: null, groupId: uid('g'), joinedAt: S.seq++, captain: false });
+            return id;
+        }
+        function P(id) { return S.people.find(p => p.id === id); }
+        function named(p) { return p && p.name.trim().length > 0; }
+        function nameOf(p) { return named(p) ? p.name.trim() : '未命名'; }
+        function esc(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
+        function sampleState() {
+            S = emptyState();
+            const id = {};
+            ['Sam', 'Eddie', 'Garry', 'Janet', 'Ada', 'Agnes', 'Michelle', 'Venus', 'Homan'].forEach(n => { id[n] = addPerson(n); });
+            S.tables = [
+                { id: uid('t'), commission: 11.5, seats: [seat(id.Sam, -2.5), seat(id.Eddie, 0), seat(id.Garry, -20), seat(id.Janet, 11)] },
+                { id: uid('t'), commission: 12.5, seats: [seat(id.Ada, -10.5), seat(id.Agnes, -14.5), seat(id.Michelle, -0.5), seat(id.Venus, 13)] }
+            ];
+            S.pureDinners = [id.Homan];
+            S.paidDinners = [{ personId: id.Sam, amount: 41 }, { personId: id.Ada, amount: 5 }];
+        }
+
+        function load() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const d = JSON.parse(raw);
+                    if (d && Array.isArray(d.people) && Array.isArray(d.tables)) { S = Object.assign(emptyState(), d); return; }
+                }
+            } catch (e) { /* 讀唔到就用範例 */ }
+            sampleState();
+        }
+        function save() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) { /* 儲存失敗唔影響使用 */ }
+        }
+
+        // ---------- 組別 ----------
+        function groupsMap() {
+            const m = new Map();
+            S.people.forEach(p => { if (!m.has(p.groupId)) m.set(p.groupId, []); m.get(p.groupId).push(p); });
+            m.forEach(arr => arr.sort((a, b) => a.joinedAt - b.joinedAt));
+            return m;
+        }
+        // 隊長：可以指定；未指定就用第一個加入嘅人。組名同組相片都跟隊長。
+        function captainOf(arr) { return arr.find(p => p.captain) || arr[0]; }
+        function captainFirst(arr) {
+            const c = captainOf(arr);
+            return [c].concat(arr.filter(m => m !== c));
+        }
+        function groupName(gid, gm) {
+            const arr = (gm || groupsMap()).get(gid) || [];
+            const c = captainOf(arr);
+            if (named(c)) return c.name.trim();
+            const first = arr.find(named);
+            return first ? first.name.trim() : '未命名';
+        }
+
+        // ---------- 頭像 ----------
+        function avatarHtml(p, size) {
+            const sz = AV_SIZE[size || 'sm'];
+            if (!p) return `<span class="inline-flex items-center justify-center shrink-0 rounded-full bg-slate-200 text-slate-500 ${sz}">?</span>`;
+            if (p.photo) return `<img src="${p.photo}" alt="" class="inline-block shrink-0 rounded-full object-cover ${sz}">`;
+            const color = AV_COLORS[(parseInt(p.id.slice(1), 10) || 0) % AV_COLORS.length];
+            const initial = named(p) ? Array.from(p.name.trim())[0] : '👤';
+            return `<span class="inline-flex items-center justify-center shrink-0 rounded-full font-semibold ${color} ${sz}">${esc(initial)}</span>`;
+        }
+
+        // ---------- 相片 ----------
+        function pickPhoto(id) {
+            photoTarget = id;
+            const input = document.getElementById('photo-input');
+            input.value = '';
+            input.click();
+        }
+        document.getElementById('photo-input').addEventListener('change', function () {
+            const file = this.files && this.files[0];
+            if (!file || !photoTarget) return;
+            const target = photoTarget;
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = function () { openCropper(img, url, target); };
+            img.onerror = function () { URL.revokeObjectURL(url); alert('讀取相片失敗，請揀另一張。'); };
+            img.src = url;
+        });
+
+        // ---------- 調整相片 (拖動移位 + 縮放) ----------
+        let crop = null;
+        function clampN(v, a, b) { return Math.min(b, Math.max(a, v)); }
+        function openCropper(img, url, target) {
+            const V = Math.min(280, window.innerWidth - 80);
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            const min = V / Math.min(img.width, img.height);
+            crop = { img: img, url: url, target: target, V: V, dpr: dpr, min: min, scale: min,
+                     x: (V - img.width * min) / 2, y: (V - img.height * min) / 2, pts: new Map(), lastDist: 0 };
+            const cv = document.getElementById('crop-canvas');
+            cv.width = Math.round(V * dpr); cv.height = Math.round(V * dpr);
+            cv.style.width = V + 'px'; cv.style.height = V + 'px';
+            document.getElementById('crop-zoom').value = 1;
+            const el = document.getElementById('cropper');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            drawCrop();
+        }
+        function drawCrop() {
+            if (!crop) return;
+            const w = crop.img.width * crop.scale, h = crop.img.height * crop.scale;
+            crop.x = clampN(crop.x, crop.V - w, 0);
+            crop.y = clampN(crop.y, crop.V - h, 0);
+            const cv = document.getElementById('crop-canvas');
+            const ctx = cv.getContext('2d');
+            ctx.setTransform(crop.dpr, 0, 0, crop.dpr, 0, 0);
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(0, 0, crop.V, crop.V);
+            ctx.drawImage(crop.img, crop.x, crop.y, w, h);
+        }
+        // z = 1..5 倍 (1 = 剛好填滿)，以 (cx, cy) 為不動點
+        function setCropZoom(z, cx, cy) {
+            z = clampN(z, 1, 5);
+            const ns = crop.min * z, k = ns / crop.scale;
+            crop.x = cx - (cx - crop.x) * k;
+            crop.y = cy - (cy - crop.y) * k;
+            crop.scale = ns;
+            document.getElementById('crop-zoom').value = z;
+            drawCrop();
+        }
+        function cropZoom(v) { if (crop) setCropZoom(parseFloat(v) || 1, crop.V / 2, crop.V / 2); }
+        function cropPts() { return Array.from(crop.pts.values()); }
+        function cropDist() {
+            const a = cropPts();
+            return a.length === 2 ? Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) : 0;
+        }
+        (function () {
+            const cv = document.getElementById('crop-canvas');
+            cv.addEventListener('pointerdown', e => {
+                if (!crop) return;
+                crop.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                cv.setPointerCapture(e.pointerId);
+                crop.lastDist = cropDist();
+            });
+            cv.addEventListener('pointermove', e => {
+                if (!crop || !crop.pts.has(e.pointerId)) return;
+                const prev = crop.pts.get(e.pointerId), cur = { x: e.clientX, y: e.clientY };
+                if (crop.pts.size === 1) {
+                    crop.x += cur.x - prev.x; crop.y += cur.y - prev.y;
+                    crop.pts.set(e.pointerId, cur);
+                    drawCrop();
+                } else {
+                    crop.pts.set(e.pointerId, cur);
+                    const d = cropDist(), a = cropPts(), r = cv.getBoundingClientRect();
+                    if (crop.lastDist > 0 && d > 0) {
+                        setCropZoom(crop.scale / crop.min * (d / crop.lastDist),
+                            (a[0].x + a[1].x) / 2 - r.left, (a[0].y + a[1].y) / 2 - r.top);
+                    }
+                    crop.lastDist = d;
+                }
+            });
+            const up = e => { if (crop) { crop.pts.delete(e.pointerId); crop.lastDist = cropDist(); } };
+            cv.addEventListener('pointerup', up);
+            cv.addEventListener('pointercancel', up);
+            cv.addEventListener('wheel', e => {
+                if (!crop) return;
+                e.preventDefault();
+                const r = cv.getBoundingClientRect();
+                setCropZoom(crop.scale / crop.min * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX - r.left, e.clientY - r.top);
+            }, { passive: false });
+        })();
+        function closeCropper() {
+            if (crop) URL.revokeObjectURL(crop.url);
+            crop = null;
+            const el = document.getElementById('cropper');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+        function cropCancel() { closeCropper(); }
+        function cropConfirm() {
+            if (!crop) return;
+            const out = 320;                                   // 輸出 320px，比之前清晰
+            const c = document.createElement('canvas');
+            c.width = out; c.height = out;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, out, out);
+            const sc = crop.scale;
+            ctx.drawImage(crop.img, -crop.x / sc, -crop.y / sc, crop.V / sc, crop.V / sc, 0, 0, out, out);
+            const dataUrl = c.toDataURL('image/jpeg', 0.88);
+            const target = crop.target;
+            closeCropper();
+            if (target === '__draft') { if (draft) draft.photo = dataUrl; }
+            else { const pp = P(target); if (pp) pp.photo = dataUrl; }
+            renderAll();
+            renderSheet();
+        }
+
+        // ---------- 點選人員視窗 ----------
+        function openPicker(opts) {
+            pk = { multi: !!opts.multi, sel: (opts.selected || []).slice(), onDone: opts.onDone, minOne: !!opts.minOne, exact: opts.exact || 0, disabled: opts.disabled || null };
+            document.getElementById('picker-title').innerText = opts.title || '點選人員';
+            document.getElementById('picker-hint').innerText = opts.hint || '';
+            document.getElementById('picker-footer').classList.toggle('hidden', !pk.multi);
+            const el = document.getElementById('picker');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            renderPicker();
+        }
+        function closePicker() {
+            const el = document.getElementById('picker');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+            pk = null;
+        }
+        function renderPicker() {
+            const list = S.people.filter(named);
+            const grid = document.getElementById('picker-grid');
+            if (list.length === 0) {
+                grid.innerHTML = '<p class="col-span-3 text-sm text-slate-500 text-center py-6">未有人員，請先喺「人員設定」輸入名稱。</p>';
+            } else {
+                grid.innerHTML = list.map(p => {
+                    const idx = pk.sel.indexOf(p.id);
+                    const on = idx >= 0;
+                    const tables = [];
+                    S.tables.forEach((t, ti) => { if (t.seats.some(s => s.personId === p.id)) tables.push(ti + 1); });
+                    let where = tables.length ? `第${tables.join('、')}台` : '';
+                    const reason = pk.disabled ? pk.disabled(p.id) : '';
+                    const blocked = !!reason && !on;
+                    if (blocked) where = reason;
+                    return `<button ${blocked ? 'disabled' : ''} onclick="pickerTap('${p.id}')" class="relative flex flex-col items-center gap-1 p-2 rounded-xl border ${blocked ? 'opacity-40 border-slate-200' : on ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200'}">
+                        ${avatarHtml(p, 'lg')}
+                        <span class="text-xs font-medium truncate w-full text-center">${esc(p.name.trim())}</span>
+                        <span class="text-[10px] ${blocked ? 'text-rose-500' : 'text-slate-400'} h-3">${esc(where)}</span>
+                        ${on && pk.multi ? `<span class="absolute top-1 right-1 bg-indigo-600 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center">${idx + 1}</span>` : ''}
+                    </button>`;
+                }).join('');
+            }
+            const ok = document.getElementById('picker-ok');
+            ok.innerText = pk.exact ? `確定 (${pk.sel.length}/${pk.exact})` : `確定 (${pk.sel.length})`;
+            ok.disabled = pk.exact ? pk.sel.length !== pk.exact : (pk.minOne && pk.sel.length === 0);
+        }
+        function pickerTap(id) {
+            if (!pk) return;
+            if (!pk.multi) {
+                const cb = pk.onDone;
+                closePicker();
+                cb([id]);
+                return;
+            }
+            const i = pk.sel.indexOf(id);
+            if (i < 0 && pk.disabled && pk.disabled(id)) return;
+            if (i >= 0) pk.sel.splice(i, 1); else if (!pk.exact || pk.sel.length < pk.exact) pk.sel.push(id);
+            renderPicker();
+        }
+        function pickerConfirm() {
+            if (!pk) return;
+            if (pk.exact && pk.sel.length !== pk.exact) return;
+            const cb = pk.onDone, sel = pk.sel.slice();
+            closePicker();
+            cb(sel);
+        }
+
+        // ---------- 人員設定 ----------
+        function refreshStats() {
+            document.getElementById('stat-tables').innerText = S.tables.length;
+            document.getElementById('stat-diners').innerText = S.pureDinners.length;
+            document.getElementById('stat-people').innerText = S.people.length;
+        }
+
+        // 新增人員：一定要輸入名稱先可以新增
+        let draft = null;
+        function addPersonRow() {
+            draft = { name: '', photo: null };
+            openSheet({ type: 'add' });
+            const input = document.getElementById('sheet-name');
+            if (input) input.focus();
+        }
+        function updateDraftName(v) {
+            if (!draft) return;
+            draft.name = v;
+            const b = document.getElementById('add-confirm');
+            if (b) b.disabled = !v.trim();
+            const h = document.getElementById('add-hint');
+            if (h && v.trim()) h.classList.remove('text-rose-500');
+        }
+        function confirmAdd() {
+            if (!draft) return;
+            const name = draft.name.trim();
+            if (!name) {
+                const h = document.getElementById('add-hint');
+                if (h) h.classList.add('text-rose-500');
+                return;
+            }
+            const id = addPerson(name);
+            P(id).photo = draft.photo;
+            draft = null;
+            closeSheet();
+            renderAll();
+        }
+
+        // ---------- 人員格仔 / 組別 ----------
+        function tablesOf(id) {
+            const tabs = [];
+            S.tables.forEach((t, i) => { if (t.seats.some(s => s.personId === id)) tabs.push(i + 1); });
+            return tabs;
+        }
+        function locationOf(p) {
+            const tabs = tablesOf(p.id);
+            const parts = [];
+            if (tabs.length) parts.push('第' + tabs.join('、') + '台');
+            if (S.pureDinners.includes(p.id)) parts.push('齋食飯');
+            return parts.join(' · ') || '未入座';
+        }
+        function unitsInOrder() {
+            // 每個格仔 = 一個組別 (單人都係一組)，位置跟第一個加入者
+            return Array.from(groupsMap().entries())
+                .map(([gid, arr]) => ({ gid: gid, arr: arr, idx: S.people.indexOf(arr[0]) }))
+                .sort((a, b) => a.idx - b.idx);
+        }
+        // 組別相片 = 隊長相片，右下角顯示組員人數
+        function groupAvatarHtml(members, size) {
+            const cap = captainOf(members);
+            const big = size === 'xl';
+            const badge = big ? 'min-w-[26px] h-[26px] text-xs' : 'min-w-[20px] h-[20px] text-[11px]';
+            return `<span class="relative inline-block shrink-0">${avatarHtml(cap, size)}<span class="absolute -bottom-1 -right-1 ${badge} px-1 rounded-full bg-indigo-600 text-white font-semibold flex items-center justify-center border-2 border-white">${members.length}</span></span>`;
+        }
+        function unitAvatar(members, size) {
+            return members.length > 1 ? groupAvatarHtml(members, size || 'sm') : avatarHtml(members[0], size || 'sm');
+        }
+
+        function renderPeople() {
+            const c = document.getElementById('people-container');
+            const tiles = unitsInOrder().map(u => {
+                const members = u.arr;
+                if (members.length > 1) {
+                    return `<div data-unit="${u.gid}" class="unit flex flex-col items-center gap-1 p-0.5 rounded-xl">
+                        ${groupAvatarHtml(members, 'xl')}
+                        <span class="text-sm font-semibold truncate w-full text-center">${esc(groupName(u.gid))} 組</span>
+                        <span class="text-[11px] text-indigo-500 h-4">${members.length} 人</span>
+                    </div>`;
+                }
+                const p = members[0];
+                return `<div data-unit="${u.gid}" class="unit flex flex-col items-center gap-1 p-0.5 rounded-xl">
+                    ${avatarHtml(p, 'xl')}
+                    <span class="text-sm font-medium truncate w-full text-center ${named(p) ? '' : 'text-slate-400'}">${esc(nameOf(p))}</span>
+                    <span class="text-[11px] text-slate-400 h-4">${esc(locationOf(p))}</span>
+                </div>`;
+            }).join('');
+            c.innerHTML = tiles + `<div class="flex flex-col items-center p-0.5" style="padding-top: 12px;"><button onclick="addPersonRow()" class="plus-btn plus-lg" title="新增人員" aria-label="新增人員"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
+        }
+
+        function updatePersonName(id, val) {
+            const p = P(id);
+            if (!p) return;
+            p.name = val;
+            renderPeople(); renderPure(); renderPaid(); renderTables();
+            calculate();
+        }
+        function removePhoto(id) {
+            const p = P(id);
+            if (p) { p.photo = null; renderAll(); renderSheet(); }
+        }
+        function removePerson(id) {
+            const p = P(id);
+            if (!p) return;
+            const used = S.tables.some(t => t.seats.some(s => s.personId === id)) ||
+                S.pureDinners.includes(id) || S.paidDinners.some(r => r.personId === id);
+            if (used && !confirm(`「${nameOf(p)}」已經喺麻雀枱或飯錢記錄入面，刪除會一併移除佢嘅記錄。確定刪除？`)) return;
+            S.people = S.people.filter(x => x.id !== id);
+            S.tables.forEach(t => { t.seats = t.seats.filter(s => s.personId !== id); });
+            S.pureDinners = S.pureDinners.filter(x => x !== id);
+            S.paidDinners = S.paidDinners.filter(r => r.personId !== id);
+            closeSheet();
+            renderAll();
+        }
+
+        // 合併組別：src 組嘅人加入 tgt 組，tgt 原有成員保持「先加入」
+        function mergeUnits(srcGid, tgtGid) {
+            if (srcGid === tgtGid) return;
+            const gm = groupsMap();
+            (gm.get(srcGid) || []).forEach(p => { p.groupId = tgtGid; p.joinedAt = S.seq++; p.captain = false; });
+            renderAll();
+        }
+        function removeFromGroup(id) {
+            const p = P(id);
+            if (!p) return;
+            p.groupId = uid('g');
+            p.joinedAt = S.seq++;
+            p.captain = false;
+            renderAll();
+            renderSheet();
+        }
+        function setCaptain(id) {
+            const p = P(id);
+            if (!p) return;
+            (groupsMap().get(p.groupId) || []).forEach(m => { m.captain = false; });
+            p.captain = true;
+            renderAll();
+            renderSheet();
+        }
+        function dissolveGroup(gid) {
+            (groupsMap().get(gid) || []).forEach(p => { p.groupId = uid('g'); p.joinedAt = S.seq++; p.captain = false; });
+            closeSheet();
+            renderAll();
+        }
+
+        // ---------- 編輯視窗 ----------
+        let sheet = null;
+        function openSheet(s) {
+            sheet = s;
+            const el = document.getElementById('sheet');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            renderSheet();
+        }
+        function closeSheet() {
+            sheet = null;
+            draft = null;
+            const el = document.getElementById('sheet');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+        function openPersonSheet(id) { openSheet({ type: 'person', id: id }); }
+        function openUnit(gid) {
+            const m = groupsMap().get(gid) || [];
+            if (m.length > 1) openSheet({ type: 'group', gid: gid });
+            else if (m[0]) openSheet({ type: 'person', id: m[0].id });
+        }
+        function renderSheet() {
+            if (!sheet) return;
+            const body = document.getElementById('sheet-body');
+            if (sheet.type === 'person') {
+                const p = P(sheet.id);
+                if (!p) { closeSheet(); return; }
+                body.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800">編輯人員</h3>
+                        <button onclick="closeSheet()" class="text-slate-400 text-xl px-2">✕</button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button onclick="pickPhoto('${p.id}')" class="shrink-0 relative" title="由相簿揀相片">
+                            ${avatarHtml(p, 'xl')}
+                            <span class="absolute -bottom-1 -right-1 bg-white border rounded-full text-xs w-6 h-6 flex items-center justify-center">📷</span>
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <input id="sheet-name" type="text" value="${esc(p.name)}" placeholder="名稱" class="w-full px-3 py-2 border rounded-xl" oninput="updatePersonName('${p.id}', this.value)">
+                            <p class="text-xs text-slate-500 mt-1.5">${esc(locationOf(p))}</p>
+                        </div>
+                    </div>
+                    ${p.photo ? `<button onclick="removePhoto('${p.id}')" class="mt-3 text-xs text-slate-500 underline">移除相片</button>` : ''}
+                    <div class="flex gap-2 mt-5">
+                        <button onclick="removePerson('${p.id}')" class="px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600">刪除</button>
+                        <button onclick="closeSheet()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium">完成</button>
+                    </div>`;
+            } else if (sheet.type === 'add') {
+                if (!draft) { closeSheet(); return; }
+                body.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800">新增人員</h3>
+                        <button onclick="closeSheet()" class="text-slate-400 text-xl px-2">✕</button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button onclick="pickPhoto('__draft')" class="shrink-0 relative" title="由相簿揀相片">
+                            ${avatarHtml({ id: 'p0', name: draft.name, photo: draft.photo }, 'xl')}
+                            <span class="absolute -bottom-1 -right-1 bg-white border rounded-full text-xs w-6 h-6 flex items-center justify-center">📷</span>
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <input id="sheet-name" type="text" value="${esc(draft.name)}" placeholder="請輸入名稱" class="w-full px-3 py-2 border rounded-xl" oninput="updateDraftName(this.value)" onkeydown="if (event.key === 'Enter') confirmAdd()">
+                            <p id="add-hint" class="text-xs text-slate-500 mt-1.5">必須輸入名稱先可以新增，相片可以之後再加。</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-5">
+                        <button onclick="closeSheet()" class="px-4 py-2.5 rounded-xl border text-slate-600">取消</button>
+                        <button id="add-confirm" onclick="confirmAdd()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium disabled:opacity-40" ${draft.name.trim() ? '' : 'disabled'}>新增</button>
+                    </div>`;
+            } else {
+                const members = groupsMap().get(sheet.gid) || [];
+                if (members.length < 2) { closeSheet(); return; }
+                const cap = captainOf(members);
+                body.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">${avatarHtml(cap, 'sm')}${esc(groupName(sheet.gid))} 組</h3>
+                        <button onclick="closeSheet()" class="text-slate-400 text-xl px-2">✕</button>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3">共 ${members.length} 人。隊長嘅名稱同相片，就係組別嘅名稱同相片。</p>
+                    <div class="divide-y divide-slate-100 max-h-[45vh] overflow-y-auto">
+                        ${captainFirst(members).map(m => `
+                            <div class="flex items-center gap-3 py-2">
+                                ${avatarHtml(m, 'sm')}
+                                <button onclick="openPersonSheet('${m.id}')" class="flex-1 min-w-0 text-left">
+                                    <span class="block truncate">${esc(nameOf(m))}${m === cap ? ' <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">👑 隊長</span>' : ''}</span>
+                                    <span class="block text-xs ${locationOf(m) === '未入座' ? 'text-amber-600' : 'text-slate-400'}">${esc(locationOf(m))}</span>
+                                </button>
+                                ${m === cap ? '' : `<button onclick="setCaptain('${m.id}')" class="text-xs text-indigo-600 border border-indigo-200 rounded-lg px-2.5 py-1">設為隊長</button>`}
+                                <button onclick="removeFromGroup('${m.id}')" class="text-xs text-rose-500 border border-rose-200 rounded-lg px-2.5 py-1">移出</button>
+                            </div>`).join('')}
+                    </div>
+                    <div class="flex gap-2 mt-5">
+                        <button onclick="dissolveGroup('${sheet.gid}')" class="px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600">解散組別</button>
+                        <button onclick="closeSheet()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium">完成</button>
+                    </div>`;
+            }
+        }
+
+        // ---------- 拖拉合成組別 (長按再拖；滑鼠可直接拖) ----------
+        let dg = null;
+        function onTileDown(e) {
+            const el = e.target.closest('[data-unit]');
+            if (!el || dg) return;
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            dg = { gid: el.dataset.unit, el: el, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY,
+                   active: false, pt: e.pointerType, pid: e.pointerId, t0: Date.now(), target: null, ghost: null, raf: 0, timer: 0 };
+            if (e.pointerType !== 'mouse') dg.timer = setTimeout(startDrag, 350);
+            window.addEventListener('pointermove', onDragMove);
+            window.addEventListener('pointerup', onDragUp);
+            window.addEventListener('pointercancel', onDragCancel);
+        }
+        function startDrag() {
+            if (!dg) return;
+            dg.active = true;
+            dg.el.classList.add('dragging-src');
+            const g = dg.el.cloneNode(true);
+            g.removeAttribute('data-unit');
+            g.id = 'drag-ghost';
+            g.style.width = dg.el.offsetWidth + 'px';
+            document.body.appendChild(g);
+            dg.ghost = g;
+            moveGhost();
+            dragLoop();
+        }
+        function moveGhost() {
+            const g = dg.ghost;
+            g.style.left = (dg.x - g.offsetWidth / 2) + 'px';
+            g.style.top = (dg.y - g.offsetHeight / 2) + 'px';
+        }
+        function dragLoop() {
+            if (!dg || !dg.active) return;
+            const margin = 90;
+            if (dg.y < margin) window.scrollBy(0, -14);
+            else if (dg.y > window.innerHeight - margin) window.scrollBy(0, 14);
+            updateTarget();
+            dg.raf = requestAnimationFrame(dragLoop);
+        }
+        function updateTarget() {
+            const under = document.elementFromPoint(dg.x, dg.y);
+            let t = under ? under.closest('[data-unit]') : null;
+            if (t && t === dg.el) t = null;
+            if (t !== dg.target) {
+                if (dg.target) dg.target.classList.remove('drop-target');
+                if (t) t.classList.add('drop-target');
+                dg.target = t;
+            }
+        }
+        function onDragMove(e) {
+            if (!dg || e.pointerId !== dg.pid) return;
+            dg.x = e.clientX; dg.y = e.clientY;
+            const dist = Math.hypot(dg.x - dg.sx, dg.y - dg.sy);
+            if (!dg.active) {
+                if (dg.pt === 'mouse') { if (dist > 6) startDrag(); }
+                else if (dist > 10) endDrag();   // 未長按已經郁，當作捲動
+                return;
+            }
+            moveGhost();
+            updateTarget();
+        }
+        function onDragUp(e) {
+            if (!dg || e.pointerId !== dg.pid) return;
+            dg.x = e.clientX; dg.y = e.clientY;
+            if (dg.active) updateTarget();
+            const dist = Math.hypot(dg.x - dg.sx, dg.y - dg.sy);
+            const gid = dg.gid, target = dg.target ? dg.target.dataset.unit : null;
+            const wasActive = dg.active;
+            endDrag();
+            if (wasActive && target) mergeUnits(gid, target);
+            else if (dist < 10) openUnit(gid);   // 輕撳 / 長按唔郁 = 開細節
+        }
+        function onDragCancel() { endDrag(); }
+        function endDrag() {
+            if (!dg) return;
+            clearTimeout(dg.timer);
+            cancelAnimationFrame(dg.raf);
+            if (dg.ghost) dg.ghost.remove();
+            dg.el.classList.remove('dragging-src');
+            if (dg.target) dg.target.classList.remove('drop-target');
+            window.removeEventListener('pointermove', onDragMove);
+            window.removeEventListener('pointerup', onDragUp);
+            window.removeEventListener('pointercancel', onDragCancel);
+            dg = null;
+        }
+        // 拖動期間禁止頁面捲動
+        document.addEventListener('touchmove', function (e) { if (dg && dg.active) e.preventDefault(); }, { passive: false });
+        (function () {
+            const c = document.getElementById('people-container');
+            c.addEventListener('pointerdown', onTileDown);
+            c.addEventListener('contextmenu', e => e.preventDefault());
+        })();
+
+        // ---------- 齋食飯名單 ----------
+        function renderPure() {
+            const c = document.getElementById('pure-dinners-container');
+            const items = S.pureDinners.map(id => P(id)).filter(Boolean);
+            if (items.length === 0) {
+                c.innerHTML = '<span class="text-xs text-slate-400">未有齋食飯人員，撳右上角嘅 ＋ 由人員名單加入。</span>';
+            } else {
+                c.innerHTML = items.map(p => `
+                    <span class="inline-flex items-center gap-1.5 bg-slate-100 rounded-full pl-1 pr-2 py-1 text-sm">
+                        ${avatarHtml(p, 'xs')}<span>${esc(nameOf(p))}</span>
+                        <button onclick="removePure('${p.id}')" class="text-slate-400 hover:text-red-500 font-bold">×</button>
+                    </span>`).join('');
+            }
+            document.getElementById('dinner-mode').value = S.dinnerMode;
+        }
+        function openPureDinnerPicker() {
+            openPicker({
+                title: '齋食飯名單：點選要加入嘅人', hint: '再點一下可以取消。已入座嘅人唔可以列入齋食飯名單。', multi: true,
+                selected: S.pureDinners,
+                disabled: id => { const t = tablesOf(id); return t.length ? `已入座第${t.join('、')}台` : ''; },
+                onDone: ids => { S.pureDinners = ids; renderPure(); calculate(); }
+            });
+        }
+        function removePure(id) {
+            S.pureDinners = S.pureDinners.filter(x => x !== id);
+            renderPure(); calculate();
+        }
+        function changeDinnerMode(v) { S.dinnerMode = v; calculate(); }
+
+        // ---------- 數字輸入檢查 ----------
+        // 只准數字同最多一個小數點；唔可以 0 開頭 (例如 007 → 7)；allowNeg 先准開頭有一個負號
+        function sanitizeNum(raw, allowNeg) {
+            let t = String(raw)
+                .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+                .replace(/[．。]/g, '.').replace(/[－−]/g, '-');
+            const neg = allowNeg && t.trim().charAt(0) === '-';
+            t = t.replace(/[^0-9.]/g, '');
+            const dot = t.indexOf('.');
+            let intp = dot >= 0 ? t.slice(0, dot) : t;
+            const dec = dot >= 0 ? t.slice(dot + 1).replace(/\./g, '') : null;
+            intp = intp.replace(/^0+(?=\d)/, '');
+            if (intp === '' && dec !== null) intp = '0';
+            return (neg ? '-' : '') + intp + (dec !== null ? '.' + dec : '');
+        }
+        function numInput(el, allowNeg) {
+            const clean = sanitizeNum(el.value, allowNeg);
+            if (clean !== el.value) {
+                el.value = clean;
+                try { el.setSelectionRange(clean.length, clean.length); } catch (e) { /* ignore */ }
+            }
+        }
+        // 贏輸輸入框用 type=number (iPhone 先有負號鍵)：擋住 e / + / 多過一個小數點同負號，去走 0 開頭
+        function numGuard(e) {
+            const d = e.data;
+            if (!d) return;
+            const el = e.target;
+            for (const ch of d) {
+                if (!/[0-9.\-]/.test(ch) ||
+                    (ch === '.' && el.value.includes('.')) ||
+                    (ch === '-' && el.value.includes('-'))) { e.preventDefault(); return; }
+            }
+        }
+        function numInputSigned(el) {
+            const v = el.value;                      // 未成數字嘅輸入 (例如淨係 "-") 會係 ''
+            if (v === '') return;
+            const clean = sanitizeNum(v, true);
+            if (clean !== v) el.value = clean;
+        }
+        // 撳入輸入框就全選，直接打新數字會取代舊數字 (打負數先唔會變成 "0-")
+        function selectAll(el) { setTimeout(() => { try { el.select(); } catch (e) { /* ignore */ } }, 0); }
+        function numBlur(el) {
+            if (el.validity && el.validity.badInput) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }
+        }
+
+        // ---------- 已付食飯錢 ----------
+        function renderPaid() {
+            const c = document.getElementById('paid-dinners-container');
+            c.innerHTML = S.paidDinners.map((r, i) => {
+                const p = P(r.personId);
+                return `
+                <div class="flex items-center gap-2">
+                    <button onclick="changePaidPerson(${i})" class="flex items-center gap-3 flex-1 min-w-0 text-left">
+                        ${avatarHtml(p, 'sm')}<span class="truncate text-base font-medium">${esc(nameOf(p))}</span>
+                    </button>
+                    <input type="text" inputmode="decimal" autocomplete="off" value="${r.amount}" placeholder="金額" class="w-24 px-3 py-1.5 border rounded-xl" oninput="numInput(this, false); updatePaidAmount(${i}, this.value)" onfocus="selectAll(this)">
+                    <button onclick="removePaid(${i})" class="text-red-500 hover:text-red-700 px-2 font-bold">×</button>
+                </div>`;
+            }).join('');
+        }
         function addPaidDinnerRow() {
-            paidDinnersData.push({ name: "", amount: 0 });
-            renderPaidDinners();
-            calculate();
-        }
-
-        function updatePaidDinner(index, field, value) {
-            paidDinnersData[index][field] = field === 'amount' ? parseFloat(value) || 0 : value;
-            calculate();
-        }
-
-        function removePaidDinner(index) {
-            paidDinnersData.splice(index, 1);
-            renderPaidDinners();
-            calculate();
-        }
-
-        function renderTables() {
-            const container = document.getElementById('tables-container');
-            container.innerHTML = '';
-            tablesData.forEach((table, tIndex) => {
-                let playersHtml = '';
-                table.players.forEach((p, pIndex) => {
-                    playersHtml += `
-                        <div class="flex items-center space-x-2 bg-slate-50 p-2 rounded-xl">
-                            <input type="text" value="${p.name}" placeholder="玩家名字 (可換人)" class="w-3/5 px-2.5 py-1 border rounded-lg text-sm bg-white" oninput="updatePlayer(${tIndex}, ${pIndex}, 'name', this.value)">
-                            <input type="number" value="${p.wl}" placeholder="贏輸" class="w-2/5 px-2.5 py-1 border rounded-lg text-sm bg-white" oninput="updatePlayer(${tIndex}, ${pIndex}, 'wl', this.value)">
-                            <button onclick="removePlayer(${tIndex}, ${pIndex})" class="text-red-400 hover:text-red-600 font-bold px-1" title="刪除此時段/玩家">×</button>
-                        </div>
-                    `;
-                });
-
-                container.innerHTML += `
-                    <div class="border border-slate-200 p-4 rounded-xl space-y-3 bg-white">
-                        <div class="flex justify-between items-center">
-                            <h3 class="font-semibold text-slate-700 text-sm">第 ${tIndex + 1} 台</h3>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs text-slate-500">抽水：</span>
-                                <input type="number" value="${table.commission}" class="w-24 px-2 py-1 border rounded-lg text-sm" oninput="updateTableCommission(${tIndex}, this.value)">
-                                <button onclick="removeTable(${tIndex})" class="text-red-500 hover:text-red-700 text-xs font-medium ml-2">刪除此台</button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                            ${playersHtml}
-                        </div>
-                        <button onclick="addPlayer(${tIndex})" class="text-xs text-indigo-600 font-medium hover:underline">+ 新增打牌時段/換人記錄</button>
-                    </div>
-                `;
+            openPicker({
+                title: '邊個俾咗飯錢？', hint: '點選一位', multi: false,
+                onDone: ids => { S.paidDinners.push({ personId: ids[0], amount: 0 }); renderPaid(); calculate(); }
             });
         }
+        function changePaidPerson(i) {
+            openPicker({
+                title: '更改付款人', multi: false,
+                onDone: ids => { S.paidDinners[i].personId = ids[0]; renderPaid(); calculate(); }
+            });
+        }
+        function updatePaidAmount(i, v) { S.paidDinners[i].amount = parseFloat(v) || 0; calculate(); }
+        function removePaid(i) { S.paidDinners.splice(i, 1); renderPaid(); calculate(); }
 
+        // ---------- 麻雀台 ----------
+        function renderTables() {
+            const c = document.getElementById('tables-container');
+            if (S.tables.length === 0) {
+                c.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">未有麻雀台，撳右上角嘅 ＋ 新增麻雀台，由人員名單點選入座。</p>';
+                return;
+            }
+            c.innerHTML = S.tables.map((t, ti) => {
+                const seatsHtml = t.seats.map((s, si) => {
+                    const p = P(s.personId);
+                    return `
+                    <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl ${s.sub ? 'ml-4 border-l-2 border-indigo-200' : ''}">
+                        <button onclick="changeSeat(${ti}, ${si})" class="shrink-0" title="更正此座位人選">${avatarHtml(p, 'sm')}</button>
+                        <div class="flex-1 min-w-0 space-y-1">
+                            <button onclick="changeSeat(${ti}, ${si})" class="block w-full text-left truncate text-sm font-medium" title="更正此座位人選">${esc(nameOf(p))}</button>
+                            <input type="number" step="any" autocomplete="off" value="${s.wl}" placeholder="贏輸" class="w-full px-3 py-1 border rounded-lg bg-white" onbeforeinput="numGuard(event)" oninput="numInputSigned(this); updateSeatWl(${ti}, ${si}, this.value)" onblur="numBlur(this)" onfocus="selectAll(this)">
+                        </div>
+                        <div class="flex flex-col items-center gap-1 shrink-0">
+                            <button onclick="swapSeat(${ti}, ${si})" class="px-2 py-1" title="中途換人">🔄</button>
+                            <button onclick="removeSeat(${ti}, ${si})" class="text-red-400 hover:text-red-600 font-bold px-2 py-1" title="刪除此時段/玩家">×</button>
+                        </div>
+                    </div>`;
+                }).join('');
+                return `
+                <div class="border border-slate-200 p-4 rounded-xl space-y-3 bg-white">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-semibold text-slate-700 text-sm">第 ${ti + 1} 台</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-slate-500">抽水：</span>
+                            <input type="text" inputmode="decimal" autocomplete="off" value="${t.commission}" class="w-24 px-2 py-1 border rounded-lg" oninput="numInput(this, false); updateTableCommission(${ti}, this.value)" onfocus="selectAll(this)">
+                            <button onclick="removeTable(${ti})" class="text-red-500 hover:text-red-700 text-xs font-medium ml-2">刪除此台</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${seatsHtml}</div>
+                    <div id="table-err-${ti}" class="hidden bg-red-50 border-l-4 border-red-500 text-sm text-red-700 font-medium p-3 rounded-lg"></div>
+                </div>`;
+            }).join('');
+        }
         function addTable() {
-            tablesData.push({ id: tablesData.length + 1, commission: 0, players: [{ name: "", wl: 0 }] });
-            renderTables();
-            calculate();
+            openPicker({
+                title: '新增麻雀台：點選入座人員', hint: '一定要揀齊 4 位，按你點選嘅次序入座。', multi: true, exact: 4,
+                onDone: ids => {
+                    S.tables.push({ id: uid('t'), commission: 0, seats: ids.map(id => seat(id, 0)) });
+                    renderTables(); calculate();
+                }
+            });
         }
-
-        function removeTable(tIndex) {
-            tablesData.splice(tIndex, 1);
-            renderTables();
-            calculate();
+        let confirmCb = null;
+        function openConfirm(title, msg, onOk) {
+            confirmCb = onOk;
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-msg').innerText = msg;
+            const el = document.getElementById('confirm');
+            el.classList.remove('hidden'); el.classList.add('flex');
         }
-
-        function updateTableCommission(tIndex, val) {
-            tablesData[tIndex].commission = parseFloat(val) || 0;
-            calculate();
+        function closeConfirm() {
+            const el = document.getElementById('confirm');
+            el.classList.add('hidden'); el.classList.remove('flex');
+            confirmCb = null;
         }
-
-        function addPlayer(tIndex) {
-            tablesData[tIndex].players.push({ name: "", wl: 0 });
-            renderTables();
-            calculate();
+        function confirmOk() { const cb = confirmCb; closeConfirm(); if (cb) cb(); }
+        function removeTable(ti) {
+            openConfirm(`刪除第 ${ti + 1} 台？`, '此台所有座位同贏輸記錄都會刪除，刪除後無法還原。', () => {
+                S.tables.splice(ti, 1); renderTables(); calculate();
+            });
         }
-
-        function removePlayer(tIndex, pIndex) {
-            tablesData[tIndex].players.splice(pIndex, 1);
-            renderTables();
-            calculate();
+        function updateTableCommission(ti, v) { S.tables[ti].commission = parseFloat(v) || 0; calculate(); }
+        function updateSeatWl(ti, si, v) { S.tables[ti].seats[si].wl = parseFloat(v) || 0; calculate(); }
+        function removeSeat(ti, si) { S.tables[ti].seats.splice(si, 1); renderTables(); calculate(); }
+        function changeSeat(ti, si) {
+            openPicker({
+                title: '更正此座位人選', hint: '只係改人，贏輸數字保持不變。', multi: false,
+                onDone: ids => { S.tables[ti].seats[si].personId = ids[0]; renderTables(); calculate(); }
+            });
         }
+        function swapSeat(ti, si) {
+            openPicker({
+                title: '中途換人：揀接替嘅人', hint: '原本座位嘅贏輸保留，新增一個接替時段。', multi: false,
+                onDone: ids => { S.tables[ti].seats.splice(si + 1, 0, seat(ids[0], 0, true)); renderTables(); calculate(); }
+            });
+        }
+        // ---------- 計算 (邏輯同原本一樣，只係改用人員 ID) ----------
+        function compute() {
+            const errors = [];
+            const tableErrors = {};     // 每台自己嘅錯誤，顯示喺該台方格底部
+            let totalDinner = 0;
+            S.paidDinners.forEach(r => { totalDinner += r.amount; });
 
-        function updatePlayer(tIndex, pIndex, field, val) {
-            tablesData[tIndex].players[pIndex][field] = field === 'wl' ? parseFloat(val) || 0 : val;
-            calculate();
+            // 已入座嘅人唔可以列入齋食飯名單
+            S.pureDinners.forEach(id => {
+                const pp = P(id), t = tablesOf(id);
+                if (pp && t.length) errors.push(`「${nameOf(pp)}」已入座第 ${t.join('、')} 台，唔可以同時列入齋食飯名單，請喺齋食飯名單移走佢。`);
+            });
+
+            let totalCommission = 0;
+            const pm = new Map(); // personId -> { wl, paid, isPlaying }
+
+            S.tables.forEach((table, ti) => {
+                let tableWlSum = 0;
+                table.seats.forEach(s => {
+                    const p = P(s.personId);
+                    if (!named(p)) return;
+                    tableWlSum += s.wl;
+                    if (!pm.has(p.id)) pm.set(p.id, { wl: 0, paid: 0, isPlaying: true });
+                    const e = pm.get(p.id);
+                    e.wl += s.wl;
+                    e.isPlaying = true;
+                });
+                totalCommission += table.commission;
+                const tableCheck = tableWlSum + table.commission;
+                if (Math.abs(tableCheck) > 0.01) {
+                    const r2 = v => Number(v.toFixed(2));
+                    tableErrors[ti] = `第 ${ti + 1} 台數目唔對路！玩家贏輸總和 (${r2(tableWlSum)}) + 抽水 (${r2(table.commission)}) = ${r2(tableCheck)} (必須剛好等於 0)`;
+                }
+            });
+
+            S.paidDinners.forEach(r => {
+                const p = P(r.personId);
+                if (!named(p)) return;
+                if (!pm.has(p.id)) pm.set(p.id, { wl: 0, paid: 0, isPlaying: false });
+                pm.get(p.id).paid += r.amount;
+            });
+
+            const pureIds = S.pureDinners.filter(id => named(P(id)));
+            pureIds.forEach(id => {
+                if (!pm.has(id)) pm.set(id, { wl: 0, paid: 0, isPlaying: false });
+            });
+
+            const balanceDiff = totalDinner - totalCommission;
+            const allIds = Array.from(pm.keys());
+            const count = allIds.length;
+            const finalShares = {};
+
+            if (balanceDiff > 0) {
+                if (S.dinnerMode === 'subsidy') {
+                    const sharePerPerson = count > 0 ? balanceDiff / count : 0;
+                    allIds.forEach(id => { finalShares[id] = sharePerPerson; });
+                } else {
+                    const pureShare = count > 0 ? totalDinner / count : 0;
+                    const playingIds = allIds.filter(id => pm.get(id).isPlaying);
+                    const nonPlayingIds = pureIds.filter(id => !pm.get(id).isPlaying);
+                    nonPlayingIds.forEach(id => { finalShares[id] = pureShare; });
+                    const remainingForPlayers = totalDinner - (pureShare * nonPlayingIds.length) - totalCommission;
+                    const playerShare = playingIds.length > 0 ? remainingForPlayers / playingIds.length : 0;
+                    playingIds.forEach(id => { finalShares[id] = playerShare; });
+                    allIds.forEach(id => {
+                        if (pm.get(id).isPlaying) finalShares[id] = playerShare;
+                        else if (!finalShares[id]) finalShares[id] = pureShare;
+                    });
+                }
+            } else {
+                const extraMoney = -balanceDiff;
+                const playingIds = allIds.filter(id => pm.get(id).isPlaying);
+                const extraPerPlayer = playingIds.length > 0 ? extraMoney / playingIds.length : 0;
+                allIds.forEach(id => { finalShares[id] = 0; });
+                playingIds.forEach(id => { finalShares[id] = -extraPerPlayer; });
+            }
+
+            const results = new Map();
+            allIds.forEach(id => {
+                const e = pm.get(id);
+                const share = finalShares[id] || 0;
+                results.set(id, { wl: e.wl, share: share, paid: e.paid, net: e.wl - share + e.paid });
+            });
+
+            return { errors, tableErrors, totalDinner, totalCommission, balanceDiff, results };
         }
 
         function calculate() {
-            const errorContainer = document.getElementById('error-container');
-            const errorMessage = document.getElementById('error-message');
-            let errors = [];
+            const c = compute();
+            const gm = groupsMap();
+            refreshStats();
 
-            // 1. 計算總食飯錢 (由已付記錄自動加總)
-            let totalDinner = 0;
-            paidDinnersData.forEach(item => {
-                totalDinner += item.amount;
-            });
-            document.getElementById('total-dinner-display').innerText = `$${totalDinner.toFixed(2)}`;
+            document.getElementById('total-dinner-display').innerText = `$${c.totalDinner.toFixed(2)}`;
 
-            // 2. 收集所有玩家及驗證每台零和
-            let totalCommission = 0;
-            let playerMap = {}; // name -> { wl, paid, isPlaying }
-
-            tablesData.forEach((table, tIndex) => {
-                let tableWlSum = 0;
-                table.players.forEach(p => {
-                    let cleanName = p.name.trim();
-                    if (!cleanName) return;
-                    tableWlSum += p.wl;
-                    if (!playerMap[cleanName]) {
-                        playerMap[cleanName] = { wl: 0, paid: 0, isPlaying: true };
-                    }
-                    playerMap[cleanName].wl += p.wl;
-                    playerMap[cleanName].isPlaying = true;
-                });
-
-                totalCommission += table.commission;
-
-                // 檢查每台贏輸總和 + 抽水是否等於 0
-                let tableCheck = tableWlSum + table.commission;
-                if (Math.abs(tableCheck) > 0.01) {
-                    errors.push(`第 ${tIndex + 1} 台數目唔對路！玩家贏輸總和 (${tableWlSum}) + 抽水 (${table.commission}) = ${tableCheck} (必須剛好等於 0)`);
-                }
-            });
-
-            // 把已付飯錢的人加入記錄
-            paidDinnersData.forEach(item => {
-                let cleanName = item.name.trim();
-                if (!cleanName) return;
-                if (!playerMap[cleanName]) {
-                    playerMap[cleanName] = { wl: 0, paid: 0, isPlaying: false };
-                }
-                playerMap[cleanName].paid += item.amount;
-            });
-
-            // 收集淨係食飯名單
-            let pureDinnerInput = document.getElementById('pure-dinners').value;
-            let pureNames = pureDinnerInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-            pureNames.forEach(name => {
-                if (!playerMap[name]) {
-                    playerMap[name] = { wl: 0, paid: 0, isPlaying: false };
-                }
-            });
-
-            // 顯示或隱藏錯誤
-            if (errors.length > 0) {
-                errorContainer.classList.remove('hidden');
-                errorMessage.innerHTML = errors.join('<br>');
+            const errBox = document.getElementById('error-container');
+            if (c.errors.length > 0) {
+                errBox.classList.remove('hidden');
+                document.getElementById('error-message').innerHTML = c.errors.map(esc).join('<br>');
             } else {
-                errorContainer.classList.add('hidden');
+                errBox.classList.add('hidden');
             }
-
-            // 3. 計算抽水與飯錢差額
-            let balanceDiff = totalDinner - totalCommission;
-            let dinnerMode = document.getElementById('dinner-mode').value;
-
-            let allDinnerNames = Object.keys(playerMap);
-            let totalDinnerPeopleCount = allDinnerNames.length;
-
-            let finalShares = {};
-
-            if (balanceDiff > 0) {
-                // 抽水唔夠畀飯錢
-                if (dinnerMode === 'subsidy') {
-                    let sharePerPerson = balanceDiff / totalDinnerPeopleCount;
-                    allDinnerNames.forEach(name => {
-                        finalShares[name] = sharePerPerson;
-                    });
-                } else {
-                    let pureShare = totalDinner / totalDinnerPeopleCount;
-                    let playingNames = Object.keys(playerMap).filter(n => playerMap[n].isPlaying);
-                    let nonPlayingNames = pureNames.filter(n => !playerMap[n].isPlaying);
-
-                    nonPlayingNames.forEach(name => {
-                        finalShares[name] = pureShare;
-                    });
-
-                    let remainingForPlayers = totalDinner - (pureShare * nonPlayingNames.length) - totalCommission;
-                    let playerShare = playingNames.length > 0 ? remainingForPlayers / playingNames.length : 0;
-                    
-                    playingNames.forEach(name => {
-                        finalShares[name] = playerShare;
-                    });
-
-                    // 對於有打牌但同時在 pureNames 裡面的人，按打牌者分攤
-                    allDinnerNames.forEach(name => {
-                        if (playerMap[name].isPlaying) {
-                            finalShares[name] = playerShare;
-                        } else if (!finalShares[name]) {
-                            finalShares[name] = pureShare;
-                        }
-                    });
-                }
-            } else {
-                // 抽水多過飯錢，多出嚟嘅金額平均分比有打麻雀嘅人
-                let extraMoney = -balanceDiff;
-                let playingNames = Object.keys(playerMap).filter(n => playerMap[n].isPlaying);
-                let extraPerPlayer = playingNames.length > 0 ? extraMoney / playingNames.length : 0;
-
-                allDinnerNames.forEach(name => {
-                    finalShares[name] = 0;
-                });
-
-                playingNames.forEach(name => {
-                    finalShares[name] = -extraPerPlayer;
-                });
-            }
-
-            // 4. 計算每個人的最終結果
-            let results = {};
-            allDinnerNames.forEach(name => {
-                let p = playerMap[name];
-                let share = finalShares[name] || 0;
-                let net = p.wl - share + p.paid;
-                results[name] = {
-                    wl: p.wl,
-                    share: share,
-                    paid: p.paid,
-                    net: net
-                };
+            S.tables.forEach((t, ti) => {
+                const el = document.getElementById('table-err-' + ti);
+                if (!el) return;
+                const m = c.tableErrors[ti];
+                if (m) { el.textContent = m; el.classList.remove('hidden'); }
+                else { el.textContent = ''; el.classList.add('hidden'); }
             });
 
-            // 更新畫面總覽
-            document.getElementById('res-total-commission').innerText = `$${totalCommission.toFixed(2)}`;
-            document.getElementById('res-total-dinner').innerText = `$${totalDinner.toFixed(2)}`;
-            document.getElementById('res-balance-diff').innerText = `$${balanceDiff.toFixed(2)} ${balanceDiff > 0 ? '(需額外分擔)' : '(抽水有突)'}`;
+            document.getElementById('res-total-commission').innerText = `$${c.totalCommission.toFixed(2)}`;
+            document.getElementById('res-total-dinner').innerText = `$${c.totalDinner.toFixed(2)}`;
+            document.getElementById('res-balance-diff').innerText = `$${c.balanceDiff.toFixed(2)} ${c.balanceDiff > 0 ? '(需額外分擔)' : '(抽水有突)'}`;
 
-            // 填入表格
-            let tbody = document.getElementById('summary-table-body');
-            tbody.innerHTML = '';
-            for (let name in results) {
-                let r = results[name];
-                tbody.innerHTML += `
+            // 個人明細
+            let rows = '';
+            c.results.forEach((r, id) => {
+                const p = P(id);
+                const members = gm.get(p.groupId) || [];
+                const tag = members.length > 1 ? `<span class="block text-xs font-normal text-indigo-600">${esc(groupName(p.groupId, gm))} 組</span>` : '';
+                rows += `
                     <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-800">${name}</td>
+                        <td class="p-3 font-medium text-slate-800"><span class="inline-flex items-center gap-2">${avatarHtml(p, 'sm')}<span class="leading-tight"><span class="block">${esc(nameOf(p))}</span>${tag}</span></span></td>
                         <td class="p-3 ${r.wl > 0 ? 'text-emerald-600 font-semibold' : r.wl < 0 ? 'text-rose-600 font-semibold' : 'text-slate-500'}">${r.wl > 0 ? '+' : ''}${r.wl.toFixed(2)}</td>
                         <td class="p-3 text-slate-600">-${r.share.toFixed(2)}</td>
                         <td class="p-3 text-indigo-600 font-medium">+${r.paid.toFixed(2)}</td>
                         <td class="p-3 text-right font-bold ${r.net > 0 ? 'text-emerald-600' : r.net < 0 ? 'text-rose-600' : 'text-slate-500'}">${r.net > 0 ? '+' : ''}${r.net.toFixed(2)}</td>
-                    </tr>
-                `;
+                    </tr>`;
+            });
+            document.getElementById('summary-table-body').innerHTML = rows;
+
+            // 以組別加總
+            const groups = new Map(); // gid -> { net, members:[person] }
+            c.results.forEach((r, id) => {
+                const p = P(id);
+                if (!groups.has(p.groupId)) groups.set(p.groupId, { net: 0, members: [] });
+                const g = groups.get(p.groupId);
+                g.net += r.net;
+                g.members.push(p);
+            });
+
+            let gHtml = '';
+            const debtors = [], creditors = [];
+            groups.forEach((g, gid) => {
+                const all = captainFirst(gm.get(gid) || g.members);
+                const capId = captainOf(all).id;
+                const label = groupName(gid, gm);
+                const multi = all.length > 1;
+                const av = unitAvatar(all, 'sm');
+                const chips = multi ? `<span class="flex flex-col gap-1.5 mt-1.5">${all.map(m => `<span class="flex items-center gap-2 text-xs text-slate-500 whitespace-nowrap">${avatarHtml(m, 'xs')}${m.id === capId ? '👑' : ''}${esc(nameOf(m))}<span class="${locationOf(m) === '未入座' ? 'text-amber-600' : 'text-slate-400'}">· ${esc(locationOf(m))}</span></span>`).join('')}</span>` : '';
+                gHtml += `
+                    <div class="flex items-start justify-between gap-2 bg-white/70 rounded-xl px-3 py-2">
+                        <span class="flex items-start gap-2 min-w-0">${av}
+                            <span class="min-w-0"><span class="font-semibold text-slate-800">${esc(label)}${multi ? ' 組' : ''}</span>${chips}</span></span>
+                        <span class="font-bold shrink-0 ${g.net > 0.01 ? 'text-emerald-600' : g.net < -0.01 ? 'text-rose-600' : 'text-slate-500'}">${g.net > 0 ? '+' : ''}${g.net.toFixed(2)}</span>
+                    </div>`;
+                const entry = { gid: gid, name: label + (multi ? ' 組' : ''), av: av };
+                if (g.net < -0.01) debtors.push(Object.assign({ amount: -g.net }, entry));
+                if (g.net > 0.01) creditors.push(Object.assign({ amount: g.net }, entry));
+            });
+            document.getElementById('group-balances').innerHTML = gHtml || '<p class="text-slate-500 italic">未有結算資料。</p>';
+
+            // 找數路徑 (組別之間)
+            const txs = [];
+            let d = 0, k = 0;
+            while (d < debtors.length && k < creditors.length) {
+                const amt = Math.min(debtors[d].amount, creditors[k].amount);
+                txs.push({ from: debtors[d], to: creditors[k], amount: amt });
+                debtors[d].amount -= amt;
+                creditors[k].amount -= amt;
+                if (debtors[d].amount < 0.01) d++;
+                if (creditors[k].amount < 0.01) k++;
+            }
+            const txList = document.getElementById('transactions-list');
+            if (txs.length === 0) {
+                txList.innerHTML = '<li class="text-slate-500 italic">目前所有人結算平衡，無需轉賬。</li>';
+            } else {
+                txList.innerHTML = txs.map(t => `
+                    <li class="leading-relaxed"><span class="font-semibold text-slate-800 whitespace-nowrap">${esc(t.from.name)}</span> 付 <span class="font-semibold text-emerald-600">$${t.amount.toFixed(2)}</span> 給 👉 <span class="font-semibold text-slate-800 whitespace-nowrap">${esc(t.to.name)}</span></li>`).join('');
             }
 
-            // 5. 計算轉賬路徑
-            let debtors = [];
-            let creditors = [];
-            for (let name in results) {
-                let net = results[name].net;
-                if (net < -0.01) debtors.push({ name: name, amount: -net });
-                if (net > 0.01) creditors.push({ name: name, amount: net });
-            }
+            // 供複製報告同測試用 (以名稱為 key)
+            const byName = {};
+            c.results.forEach((r, id) => { byName[nameOf(P(id))] = r; });
+            window.currentResults = byName;
+            window.currentTransactions = txs.map(t => ({ from: t.from.name, to: t.to.name, amount: t.amount }));
 
-            let txList = document.getElementById('transactions-list');
-            txList.innerHTML = '';
-            let txCount = 0;
-
-            let dIdx = 0, cIdx = 0;
-            while (dIdx < debtors.length && cIdx < creditors.length) {
-                let debtor = debtors[dIdx];
-                let creditor = creditors[cIdx];
-                let amt = Math.min(debtor.amount, creditor.amount);
-
-                txList.innerHTML += `<li class="flex items-center space-x-2"><span>👉</span><span class="font-semibold text-slate-800">${debtor.name}</span> 付 <span class="font-semibold text-emerald-600">$${amt.toFixed(2)}</span> 給 <span class="font-semibold text-slate-800">${creditor.name}</span></li>`;
-                txCount++;
-
-                debtor.amount -= amt;
-                creditor.amount -= amt;
-
-                if (debtor.amount < 0.01) dIdx++;
-                if (creditor.amount < 0.01) cIdx++;
-            }
-
-            if (txCount === 0) {
-                txList.innerHTML = `<li class="text-slate-500 italic">目前所有人結算平衡，無需轉賬。</li>`;
-            }
-
-            window.currentResults = results;
+            save();
         }
 
         function copyReport() {
-            let text = "🀄 麻雀與食飯結算報告\n\n";
-            let results = window.currentResults;
-            for (let name in results) {
-                let r = results[name];
+            let text = '🀄 麻雀與食飯結算報告\n\n';
+            const results = window.currentResults || {};
+            for (const name in results) {
+                const r = results[name];
                 text += `${name}: ${r.net >= 0 ? '+' : ''}${r.net.toFixed(2)}\n`;
             }
+            const txs = window.currentTransactions || [];
+            text += '\n💸 建議找數方式\n';
+            if (txs.length === 0) text += '目前所有人結算平衡，無需轉賬。\n';
+            txs.forEach(t => { text += `${t.from} 付 $${t.amount.toFixed(2)} 給 ${t.to}\n`; });
             navigator.clipboard.writeText(text).then(() => {
-                alert("已成功複製結算報告到剪貼簿！");
+                alert('已成功複製結算報告到剪貼簿！');
             });
         }
+
+        // ---------- 資料管理 ----------
+        function loadSample() {
+            if (!confirm('還原成範例資料？目前所有人員、相片同記錄會被取代。')) return;
+            sampleState();
+            renderAll();
+        }
+        function clearAll() {
+            if (!confirm('清空全部資料？所有人員、相片同記錄都會刪除，無法還原。')) return;
+            S = emptyState();
+            renderAll();
+        }
+
+        function renderAll() {
+            renderPeople();
+            renderPure();
+            renderPaid();
+            renderTables();
+            calculate();
+        }
+
+        window.onload = function () {
+            load();
+            renderAll();
+        };
     </script>
 </body>
 </html>
