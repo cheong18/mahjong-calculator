@@ -1277,8 +1277,9 @@
 
             // 人數設定 (按組別)
             const peopleHtml = Array.from(gm.entries()).map(([gid, arr]) => {
-                const all = captainFirst(arr.filter(named));
-                if (!all.length) return '';
+                const namedArr = arr.filter(named);
+                if (!namedArr.length) return '';
+                const all = captainFirst(namedArr);
                 const multi = all.length > 1;
                 return `<div class="unit"><div class="unit-top">${rptAv(all[0], 64)}</div>
                     <div class="unit-name">${esc(groupName(gid, gm))}${multi ? ' 組' : ''}</div>
@@ -1341,8 +1342,20 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
             calculate();
             const now = new Date(), pad = n => String(n).padStart(2, '0');
             const name = `麻雀結算報告_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.html`;
-            const blob = new Blob([buildReportHtml()], { type: 'text/html' });
+            const html = buildReportHtml();
+            const blob = new Blob([html], { type: 'text/html' });
             const file = new File([blob], name, { type: 'text/html' });
+            // iPhone App (Capacitor)：寫入暫存檔，再用系統分享選單傳出
+            const cap = window.Capacitor;
+            if (cap && cap.isNativePlatform && cap.isNativePlatform() && cap.registerPlugin) {
+                try {
+                    const Fs = cap.Plugins.Filesystem || cap.registerPlugin('Filesystem');
+                    const Sh = cap.Plugins.Share || cap.registerPlugin('Share');
+                    const w = await Fs.writeFile({ path: name, data: html, directory: 'CACHE', encoding: 'utf8' });
+                    await Sh.share({ title: '麻雀結算報告', url: w.uri });
+                } catch (e) { if (!(e && /cancel/i.test(String(e.message || e)))) alert('分享失敗：' + (e && e.message ? e.message : e)); }
+                return;
+            }
             try {
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({ files: [file], title: '麻雀結算報告' });
