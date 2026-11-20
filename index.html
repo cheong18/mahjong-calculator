@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>麻雀與食飯抽水結算系統</title>
+    <meta name="theme-color" content="#0f4c3a">
     <link rel="stylesheet" href="tailwind.css">
     <style>
         body.py-8 { padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.75rem)); padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
@@ -13,10 +14,10 @@
         .unit { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; cursor: grab; transition: transform .12s, box-shadow .12s; }
         .unit img { pointer-events: none; -webkit-user-drag: none; }
         .unit.dragging-src { opacity: .3; }
-        .unit.drop-target { box-shadow: 0 0 0 3px #6366f1; background: #eef2ff; transform: scale(1.04); }
+        .unit.drop-target { box-shadow: 0 0 0 3px #2f8c63; background: #eef7f1; transform: scale(1.04); }
         /* 圓形 + 新增掣 */
-        .plus-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 9999px; background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
-        .plus-btn:active { background: #4338ca; }
+        .plus-btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 9999px; background: linear-gradient(160deg, #2f8c63, #176646); color: #fff; box-shadow: 0 2px 6px rgba(15,76,58,.35); }
+        .plus-btn:active { background: #0f4c3a; transform: scale(.94); }
         .plus-btn svg { width: 20px; height: 20px; }
         .plus-btn.plus-sm { width: 28px; height: 28px; }
         .plus-btn.plus-sm svg { width: 16px; height: 16px; }
@@ -24,19 +25,39 @@
         .plus-btn.plus-lg svg { width: 36px; height: 36px; }
         /* 個人明細表：左右捲動時鎖死最左邊名字欄 */
         #summary-table th:first-child, #summary-table td:first-child { position: sticky; left: 0; box-shadow: 2px 0 4px -2px rgba(0,0,0,.18); }
-        #summary-table th:first-child { z-index: 2; background: #f1f5f9; }
-        #summary-table td:first-child { z-index: 1; background: #fff; }
-        #summary-table tr:hover td:first-child { background: #f8fafc; }
+        #summary-table th:first-child { z-index: 2; background: #efebdc; }
+        #summary-table td:first-child { z-index: 1; background: #fffefa; }
+        #summary-table tr:hover td:first-child { background: #f7f4ea; }
         #drag-ghost { position: fixed; z-index: 70; pointer-events: none; opacity: .92; transform: scale(1.1); box-shadow: 0 10px 25px rgba(0,0,0,.25); background: #fff; border-radius: 12px; }
+
+        /* ===== 麻雀綠色主題 (簡約) ===== */
+        body.bg-slate-50 { background-image: linear-gradient(180deg, #dcebe1 0, #f1f1e4 280px); background-attachment: fixed; }
+        /* 標題：深綠檯布 + 金色細邊 */
+        .hero { position: relative; text-align: center; padding: 26px 20px 24px; border-radius: 22px; color: #f7f4ea;
+                background: radial-gradient(120% 140% at 15% 0%, #1f7a54 0%, #0f4c3a 55%, #0a3a2c 100%);
+                box-shadow: 0 6px 18px rgba(15,76,58,.28), inset 0 0 0 1px rgba(214,180,76,.55); }
+        .hero::after { content: ""; position: absolute; inset: 7px; border-radius: 16px; border: 1px solid rgba(214,180,76,.28); pointer-events: none; }
+        .hero h1 { font-size: 22px; font-weight: 700; letter-spacing: .04em; line-height: 1.35; }
+        .hero p { margin-top: 6px; font-size: 13px; color: #bfe0cd; }
+        /* 卡片：象牙白、細邊、淡陰影 */
+        .rounded-2xl.bg-white { background: #fffefa; border-color: #e6e0cb; box-shadow: 0 1px 2px rgba(20,60,40,.05), 0 4px 14px rgba(20,60,40,.05); }
+        h2.text-lg { color: #0f4c3a; font-weight: 700; letter-spacing: .02em; }
+        .bg-slate-50.rounded-xl { background: #f4f0e2; border-color: #e6e0cb; }
+        .bg-indigo-50\/50 { background: #eaf4ee; }
+        /* 輸入框 */
+        input[type=text], input[type=number], select { background: #fffefa; border-color: #d9d3bb; }
+        input:focus, select:focus { outline: none; border-color: #2f8c63; box-shadow: 0 0 0 3px rgba(47,140,99,.22); }
+        /* 底部彈出視窗 */
+        #sheet > div, #picker > div, #confirm > div, #cropper > div { background: #fffefa; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6">
     <div class="max-w-4xl mx-auto space-y-6">
 
         <!-- 標題 -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-            <h1 class="text-2xl font-bold text-slate-900">🀄️麻雀與食飯抽水結算系統</h1>
-            <p class="text-sm text-slate-500 mt-1">支援中途換人、抽水計飯錢同結算</p>
+        <div class="hero">
+            <h1>🀄 麻雀與食飯抽水結算系統</h1>
+            <p>支援中途換人、抽水計飯錢同結算</p>
         </div>
 
         <!-- 錯誤警告容器 -->
@@ -167,7 +188,7 @@
             </div>
 
             <!-- 複製按鈕 -->
-            <button id="share-btn" onclick="shareReportPdf()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition shadow-sm disabled:opacity-60">
+            <button id="share-btn" onclick="shareReportPdf()" class="w-full bg-indigo-800 text-white py-3 rounded-xl font-medium hover:bg-indigo-900 transition shadow-sm disabled:opacity-60">
                 📤 一鍵分享完整結算報告 (PDF)
             </button>
             <button onclick="copyReport()" class="w-full text-slate-500 text-sm underline">只複製文字摘要</button>
@@ -243,9 +264,9 @@
     <script>
         const STORAGE_KEY = 'mahjong-calc-v1';
         const AV_COLORS = [
-            'bg-rose-100 text-rose-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700',
-            'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700', 'bg-teal-100 text-teal-700',
-            'bg-orange-100 text-orange-700', 'bg-pink-100 text-pink-700'
+            'bg-emerald-100 text-emerald-800', 'bg-amber-100 text-amber-800', 'bg-teal-100 text-teal-800',
+            'bg-lime-100 text-lime-800', 'bg-orange-100 text-orange-800', 'bg-rose-100 text-rose-800',
+            'bg-sky-100 text-sky-800', 'bg-slate-200 text-slate-700'
         ];
         // 頭像大細：全部地方統一放大一半 (xl 亦係人數名單用嘅大細)
         const AV_SIZE = {
@@ -1257,10 +1278,10 @@
         }
 
         // ---------- 匯出完整結算報告 (獨立 HTML 檔) ----------
-        const RPT_COLORS = ['#fef3c7|#b45309', '#ede9fe|#6d28d9', '#fce7f3|#be185d', '#d1fae5|#047857', '#e0f2fe|#0369a1', '#ccfbf1|#0f766e', '#ffedd5|#c2410c', '#f1f5f9|#475569'];
+        const RPT_COLORS = ['#dcefe3|#14532d', '#f6ecc8|#7a5a0a', '#d3ede9|#0f5a52', '#e4eecb|#4a5d12', '#f8e0cc|#8a3f0c', '#f3d9d6|#8f1d17', '#d9e8f2|#1e4e72', '#e6e2d2|#4a4a3d'];
         function rptAv(p, px) {
             const st = `width:${px}px;height:${px}px;border-radius:50%;flex:none;overflow:hidden;`;
-            if (!p) return `<span class="av" style="${st}background:#e2e8f0;color:#64748b">?</span>`;
+            if (!p) return `<span class="av" style="${st}background:#e6e2d2;color:#5f5e4e">?</span>`;
             if (p.photo) return `<img src="${p.photo}" alt="" style="${st}object-fit:cover">`;
             const [bg, fg] = RPT_COLORS[(parseInt(p.id.slice(1), 10) || 0) % RPT_COLORS.length].split('|');
             const initial = named(p) ? Array.from(p.name.trim())[0] : '👤';
@@ -1289,7 +1310,7 @@
                     <div class="loc">${esc(locationOf(all[0]))}</div></div>`;
             }).join('');
 
-            const pureHtml = S.pureDinners.map(P).filter(named).map(p => `<span class="chip">${rptAv(p, 34)}${esc(nameOf(p))}</span>`).join('') || '<span class="muted">（無）</span>';
+            const pureHtml = S.pureDinners.map(P).filter(named).map(p => `<div class="row" style="justify-content:flex-start"><span class="chip">${rptAv(p, 34)}${esc(nameOf(p))}</span></div>`).join('') || '<span class="muted">（無）</span>';
             const paidHtml = S.paidDinners.filter(r => named(P(r.personId))).map(r => `<div class="row"><span class="chip">${rptAv(P(r.personId), 34)}${esc(nameOf(P(r.personId)))}</span><b>$${r.amount.toFixed(2)}</b></div>`).join('') || '<span class="muted">（無記錄）</span>';
             const modeLabel = S.dinnerMode === 'subsidy' ? '參與抽水補貼' : '無抽水補貼（純計飯錢）';
 
@@ -1313,22 +1334,24 @@
             }).join('') || '<span class="muted">未有結算資料。</span>';
             const txHtml = L.txs.length ? L.txs.map(t => `<li><b>${esc(t.from)}</b> 付 <b class="pos">$${t.amount.toFixed(2)}</b> 給 👉 <b>${esc(t.to)}</b></li>`).join('') : '<li class="muted">目前所有人結算平衡，無需轉賬。</li>';
 
-            const css = `*{box-sizing:border-box}body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,"Helvetica Neue",Arial,"PingFang HK",sans-serif;line-height:1.2;font-size:17px}
-.wrap{padding:16px 12px 28px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin-top:14px}.inner{background:#f8fafc;margin-top:12px;padding:12px}
-h1{text-align:center;font-size:24px;margin:0;line-height:1.3}h1+p{text-align:center;color:#64748b;margin:6px 0 0;font-size:16px}h2{font-size:21px;margin:0 0 12px}h3{font-size:19px;margin:0}
-.muted{color:#94a3b8;font-size:15px}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0;font-size:18px}.row.top{align-items:flex-start}.grow{flex:1}
-.av{display:flex;align-items:center;justify-content:center;font-weight:600;line-height:1}img{display:block}.chip{display:inline-flex;align-items:center;gap:8px;background:#f1f5f9;border-radius:999px;padding:4px 14px 4px 4px;margin:3px;font-size:18px}
-.units{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.unit{text-align:center;padding:12px 8px;border:1px solid #e2e8f0;border-radius:14px}.unit-top{display:flex;justify-content:center}.unit-name{font-size:19px;font-weight:600;margin-top:6px}.loc{font-size:15px;color:#94a3b8;margin-top:2px}
-.mem{display:flex;align-items:center;gap:8px;font-size:16px;color:#64748b;margin-top:6px;text-align:left}.mem.small{font-size:15px}.nm{display:inline-flex;align-items:center;gap:10px}.tag{font-size:15px;color:#4f46e5;font-weight:400}
-.seat{display:flex;align-items:center;gap:12px;background:#fff;border-radius:12px;padding:8px 12px;margin-top:8px;font-size:19px}.seat.sub{margin-left:14px;border-left:3px solid #c7d2fe}
-.pos{color:#059669}.neg{color:#e11d48}.zero{color:#64748b}.ind{color:#4f46e5}.err{background:#fef2f2;border-left:4px solid #ef4444;color:#b91c1c;font-size:16px;line-height:1.35;padding:10px;border-radius:8px;margin-top:10px}
-.stats{display:grid;grid-template-columns:1fr;gap:8px;text-align:center}.stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.stat small{display:block;color:#64748b;font-size:15px}.stat b{font-size:24px}
-.pc{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-top:10px}.pc-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.pname{font-size:20px;font-weight:600}.big{font-size:26px}
-.pc-sub{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:16px;color:#64748b}.pc-sub b{font-weight:600}
-.gname{height:48px;display:flex;align-items:center;font-size:20px;font-weight:700}.gamt{height:48px;display:flex;align-items:center;font-size:22px}.pay{background:#eef2ff;border-color:#c7d2fe}ul{padding:0;list-style:none;margin:14px 0 0;border-top:1px solid #c7d2fe;padding-top:12px}li{margin:14px 0;font-size:20px;line-height:1.3}footer{text-align:center;color:#94a3b8;font-size:14px;margin-top:20px}`;
+            const css = `*{box-sizing:border-box}body{margin:0;background:#f1efe2;color:#25261e;font-family:-apple-system,"Helvetica Neue",Arial,"PingFang HK",sans-serif;line-height:1.2;font-size:17px}
+.wrap{padding:16px 12px 28px}.card{background:#fffefa;border:1px solid #e6e0cb;border-radius:16px;padding:16px;margin-top:14px}.inner{background:#f4f0e2;margin-top:12px;padding:12px}
+.hero{text-align:center;padding:22px 16px 20px;border-radius:20px;color:#f7f4ea;background:linear-gradient(135deg,#1f7a54,#0f4c3a 60%,#0a3a2c);border:1px solid #c9a93f}
+.hero h1{margin:0;font-size:24px;line-height:1.3;letter-spacing:1px}.hero p{margin:8px 0 0;color:#bfe0cd;font-size:16px}
+h2{font-size:21px;margin:0 0 12px;color:#0f4c3a}h3{font-size:19px;margin:0;color:#0f4c3a}
+.muted{color:#8a8774;font-size:15px}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0;font-size:18px}.row.top{align-items:flex-start}.grow{flex:1}
+.av{display:flex;align-items:center;justify-content:center;font-weight:600;line-height:1}img{display:block}.chip{display:inline-flex;align-items:center;gap:8px;background:#efebdc;border-radius:999px;padding:4px 14px 4px 4px;margin:3px;font-size:18px}
+.units{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.unit{text-align:center;padding:12px 8px;border:1px solid #e6e0cb;border-radius:14px;background:#fffefa}.unit-top{display:flex;justify-content:center}.unit-name{font-size:19px;font-weight:600;margin-top:6px}.loc{font-size:15px;color:#8a8774;margin-top:2px}
+.mem{display:flex;align-items:center;gap:8px;font-size:16px;color:#5f5e4e;margin-top:6px;text-align:left}.mem.small{font-size:15px}.nm{display:inline-flex;align-items:center;gap:10px}.tag{font-size:15px;color:#1f7a54;font-weight:400}
+.seat{display:flex;align-items:center;gap:12px;background:#fffefa;border-radius:12px;padding:8px 12px;margin-top:8px;font-size:19px}.seat.sub{margin-left:14px;border-left:3px solid #8cc8a7}
+.pos{color:#15803d}.neg{color:#b3261e}.zero{color:#6b6a58}.ind{color:#1f7a54}.err{background:#fbeceb;border-left:4px solid #b3261e;color:#8f1d17;font-size:16px;line-height:1.35;padding:10px;border-radius:8px;margin-top:10px}
+.stats{display:grid;grid-template-columns:1fr;gap:8px;text-align:center}.stat{background:#f4f0e2;border:1px solid #e6e0cb;border-radius:12px;padding:10px}.stat small{display:block;color:#5f5e4e;font-size:15px}.stat b{font-size:24px;color:#0f4c3a}
+.pc{background:#fffefa;border:1px solid #e6e0cb;border-radius:14px;padding:12px;margin-top:10px}.pc-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.pname{font-size:20px;font-weight:600}.big{font-size:26px}
+.pc-sub{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;padding-top:8px;border-top:1px solid #efebdc;font-size:16px;color:#5f5e4e}.pc-sub b{font-weight:600}
+.gname{height:48px;display:flex;align-items:center;font-size:20px;font-weight:700}.gamt{height:48px;display:flex;align-items:center;font-size:22px}.pay{background:#eaf4ee;border-color:#b9dfc9}ul{padding:0;list-style:none;margin:14px 0 0;border-top:1px solid #b9dfc9;padding-top:12px}li{margin:14px 0;font-size:20px;line-height:1.3}footer{text-align:center;color:#8a8774;font-size:14px;margin-top:20px}`;
 
             return `<!DOCTYPE html><html lang="zh-HK"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>麻雀與食飯結算報告 ${dateStr}</title><style>${css}</style></head><body><div class="wrap">
-<h1>🀄 麻雀與食飯抽水結算報告</h1><p>報告日期：${dateStr}</p>
+<div class="hero"><h1>🀄 麻雀與食飯抽水結算報告</h1><p>報告日期：${dateStr}</p></div>
 <div class="card"><h2>🐷 人數設定</h2><p class="muted">麻雀枱 ${S.tables.length} 台 · 齋食飯 ${S.pureDinners.length} 人 · 總人數 ${S.people.filter(named).length} 人</p><div class="units">${peopleHtml}</div></div>
 <div class="card"><h2>🍲 齋食飯名單</h2><div>${pureHtml}</div><p class="muted">飯錢計算方法：${esc(modeLabel)}</p></div>
 <div class="card"><h2>💰 已付食飯錢記錄</h2>${paidHtml}<div class="row" style="border-top:1px solid #e2e8f0;padding-top:8px"><span class="muted">食飯錢總額</span><b>$${c.totalDinner.toFixed(2)}</b></div></div>
@@ -1369,7 +1392,7 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
                     const inner = innerCuts.filter(c => c > y + 20 && c <= limit);
                     return inner.length ? Math.max.apply(null, inner) : limit;
                 };
-                const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#f8fafc', width: W, windowWidth: W, useCORS: true, logging: false });
+                const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#f1efe2', width: W, windowWidth: W, useCORS: true, logging: false });
                 // 頁高：至少似手機螢幕比例；如果有方格更高，就將頁高加大，確保方格唔會跨頁
                 const tallest = Math.max.apply(null, Array.from(doc.querySelector('.wrap').children).map(el => el.getBoundingClientRect().height + 28));
                 const pageH = Math.min(1600, Math.max(800, Math.ceil(tallest)));
@@ -1382,11 +1405,11 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
                     const part = document.createElement('canvas');
                     part.width = canvas.width; part.height = sliceH;
                     const ctx = part.getContext('2d');
-                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, part.width, part.height);
+                    ctx.fillStyle = '#f1efe2'; ctx.fillRect(0, 0, part.width, part.height);
                     ctx.drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
                     if (!first) pdf.addPage();
                     first = false;
-                    pdf.setFillColor(248, 250, 252); pdf.rect(0, 0, W, pageH, 'F');
+                    pdf.setFillColor(241, 239, 226); pdf.rect(0, 0, W, pageH, 'F');
                     pdf.addImage(part.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, W, W * sliceH / canvas.width);
                     y = end;
                 }
