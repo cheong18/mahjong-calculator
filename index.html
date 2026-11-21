@@ -24,7 +24,8 @@
         .plus-btn.plus-lg { width: 72px; height: 72px; }
         .plus-btn.plus-lg svg { width: 36px; height: 36px; }
         /* 個人明細表：左右捲動時鎖死最左邊名字欄 */
-        #summary-table th:first-child, #summary-table td:first-child { position: sticky; left: 0; box-shadow: 2px 0 4px -2px rgba(0,0,0,.18); }
+        #summary-table th, #summary-table td { padding-left: 5px; padding-right: 5px; }
+        #summary-table th:first-child, #summary-table td:first-child { position: sticky; left: 0; }
         #summary-table th:first-child { z-index: 2; background: #efebdc; }
         #summary-table td:first-child { z-index: 1; background: #fffefa; }
         #summary-table tr:hover td:first-child { background: #f7f4ea; }
@@ -174,11 +175,11 @@
                 <table id="summary-table" class="w-full text-left border-collapse text-sm">
                     <thead>
                         <tr class="bg-slate-100 text-slate-600 text-xs uppercase">
-                            <th class="p-3 rounded-l-xl">名字</th>
-                            <th class="p-3">贏輸</th>
-                            <th class="p-3">飯錢分擔</th>
-                            <th class="p-3">已付飯錢</th>
-                            <th class="p-3 rounded-r-xl text-right">最終結果 (收/付)</th>
+                            <th class="px-2 py-3 rounded-l-xl">名字</th>
+                            <th class="px-2 py-3">贏輸</th>
+                            <th class="px-2 py-3">飯錢分擔</th>
+                            <th class="px-2 py-3">已付飯錢</th>
+                            <th class="px-2 py-3 rounded-r-xl text-right">最終結果 (收/付)</th>
                         </tr>
                     </thead>
                     <tbody id="summary-table-body" class="divide-y divide-slate-100">
@@ -1398,14 +1399,13 @@
             c.results.forEach((r, id) => {
                 const p = P(id);
                 const members = gm.get(p.groupId) || [];
-                const tag = members.length > 1 ? `<span class="block text-xs font-normal text-indigo-600">${esc(groupName(p.groupId, gm))} 組</span>` : '';
-                rows += `
+                                rows += `
                     <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-800"><span class="inline-flex items-center gap-2">${avatarHtml(p, 'sm')}<span class="leading-tight"><span class="block">${esc(nameOf(p))}</span>${tag}</span></span></td>
-                        <td class="p-3 ${r.wl > 0 ? 'text-emerald-600 font-semibold' : r.wl < 0 ? 'text-rose-600 font-semibold' : 'text-slate-500'}">${r.wl > 0 ? '+' : ''}${r.wl.toFixed(2)}</td>
-                        <td class="p-3 text-slate-600">-${r.share.toFixed(2)}</td>
-                        <td class="p-3 text-indigo-600 font-medium">+${r.paid.toFixed(2)}</td>
-                        <td class="p-3 text-right font-bold ${r.net > 0 ? 'text-emerald-600' : r.net < 0 ? 'text-rose-600' : 'text-slate-500'}">${r.net > 0 ? '+' : ''}${r.net.toFixed(2)}</td>
+                        <td class="px-2 py-3" title="${esc(nameOf(p))}">${avatarHtml(p, 'sm')}</td>
+                        <td class="px-2 py-3 ${r.wl > 0 ? 'text-emerald-600 font-semibold' : r.wl < 0 ? 'text-rose-600 font-semibold' : 'text-slate-500'}">${r.wl > 0 ? '+' : ''}${r.wl.toFixed(2)}</td>
+                        <td class="px-2 py-3 text-slate-600">-${r.share.toFixed(2)}</td>
+                        <td class="px-2 py-3 text-indigo-600 font-medium">+${r.paid.toFixed(2)}</td>
+                        <td class="px-2 py-3 text-right font-bold ${r.net > 0 ? 'text-emerald-600' : r.net < 0 ? 'text-rose-600' : 'text-slate-500'}">${r.net > 0 ? '+' : ''}${r.net.toFixed(2)}</td>
                     </tr>`;
             });
             document.getElementById('summary-table-body').innerHTML = rows;
