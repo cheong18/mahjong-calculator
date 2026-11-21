@@ -58,7 +58,7 @@
         .ch-stat { background: #f4f0e2; border: 1px solid #e6e0cb; border-radius: 12px; padding: 8px 4px; text-align: center; }
         .ch-stat small { display: block; font-size: 11px; color: #5f5e4e; } .ch-stat b { font-size: 17px; }
         .ch-pos { color: #15803d; } .ch-neg { color: #b3261e; }
-        #line-chart svg, #daily-bars svg { display: block; width: 100%; height: auto; }
+        #daily-bars svg { display: block; width: 100%; height: auto; } #line-chart svg { display: block; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6">
@@ -220,6 +220,7 @@
         <div class="flex justify-center gap-4 text-xs text-slate-400">
             <button onclick="loadSample()" class="underline">還原範例資料</button>
             <button onclick="clearAll()" class="underline">清空全部</button>
+            <button onclick="openData()" class="underline">匯出 / 匯入</button>
         </div>
 
     </div>
@@ -251,6 +252,22 @@
             </div>
         </div>
     </div>
+
+    <!-- 匯出 / 匯入視窗 -->
+    <div id="data-modal" class="hidden fixed inset-0 z-50 bg-black/40 items-end sm:items-center justify-center" onclick="if (event.target === this) closeData()">
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-semibold text-slate-800 text-lg">匯出 / 匯入資料</h3>
+                <button onclick="closeData()" class="text-slate-400 text-xl px-2">✕</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">備份檔包括所有人員（連相片）、麻雀枱、食飯記錄同累積統計。匯入會取代呢部機現有嘅全部資料。</p>
+            <div class="space-y-2">
+                <button onclick="exportData()" class="w-full py-3 rounded-xl bg-indigo-800 text-white font-medium">📤 匯出全部資料</button>
+                <button onclick="document.getElementById('import-input').click()" class="ghost-btn" style="padding:12px">📥 匯入資料（取代現有）</button>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="import-input" accept=".json,application/json" class="hidden" onchange="importData(this)">
 
     <!-- 累積統計視窗 -->
     <div id="stats-modal" class="hidden fixed inset-0 z-50 bg-black/40 items-end sm:items-center justify-center" onclick="if (event.target === this) closeStats()">
@@ -687,7 +704,11 @@
                 S.pureDinners.includes(id) || S.paidDinners.some(r => r.personId === id);
             if (used && !confirm(`「${nameOf(p)}」已經喺麻雀枱或飯錢記錄入面，刪除會一併移除佢嘅記錄。確定刪除？`)) return;
             S.people = S.people.filter(x => x.id !== id);
-            S.tables.forEach(t => { t.seats = t.seats.filter(s => s.personId !== id); });
+            S.tables.forEach(t => {
+                // 換人時段直接移除；正選座位變空位，等用戶撳 ＋ 補人
+                t.seats = t.seats.filter(s => !(s.personId === id && s.sub));
+                t.seats.forEach(s => { if (s.personId === id) { s.personId = null; s.wl = 0; } });
+            });
             S.pureDinners = S.pureDinners.filter(x => x !== id);
             S.paidDinners = S.paidDinners.filter(r => r.personId !== id);
             closeSheet();
@@ -1029,6 +1050,15 @@
             c.innerHTML = S.tables.map((t, ti) => {
                 const seatsHtml = t.seats.map((s, si) => {
                     const p = P(s.personId);
+                    if (!p) {
+                        const replaced = t.seats[si + 1] && t.seats[si + 1].sub;
+                        return `
+                    <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl ${s.sub ? 'ml-4' : ''}" style="border:1.5px dashed #cdc6ab">
+                        ${replaced ? '<span class="shrink-0" style="width:56px;text-align:center;color:#8a8774">—</span>' : `<button onclick="changeSeat(${ti}, ${si})" class="plus-btn shrink-0" title="補位：揀人入座" aria-label="補位"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`}
+                        <div class="flex-1 text-sm text-slate-500">${replaced ? '（已刪除）' : '空位：撳 ＋ 揀人補位'}</div>
+                        ${replaced || s.sub ? `<button onclick="removeSeat(${ti}, ${si})" class="text-red-400 hover:text-red-600 font-bold px-2 py-1" title="刪除此座位">×</button>` : ''}
+                    </div>`;
+                    }
                     return `
                     <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl ${s.sub ? 'ml-4 border-l-2 border-indigo-200' : ''}">
                         <button onclick="changeSeat(${ti}, ${si})" class="shrink-0" title="更正此座位人選">${avatarHtml(p, 'sm')}</button>
@@ -1064,7 +1094,7 @@
                 if (ti === exTi && si === exSi) return;
                 const next = t.seats[si + 1];
                 if (next && next.sub) return;                 // 已被換走
-                if (!active.has(s.personId)) active.set(s.personId, ti + 1);
+                if (s.personId && !active.has(s.personId)) active.set(s.personId, ti + 1);
             }));
             return id => active.has(id) ? `已入座第${active.get(id)}台` : '';
         }
@@ -1108,10 +1138,14 @@
             updateSeatWl(ti, si, el.value);
         }
         function updateSeatWl(ti, si, v) { S.tables[ti].seats[si].wl = parseFloat(v) || 0; calculate(); }
-        function removeSeat(ti, si) { S.tables[ti].seats.splice(si, 1); renderTables(); calculate(); }
+        function removeSeat(ti, si) {
+            const arr = S.tables[ti].seats, gone = arr.splice(si, 1)[0];
+            if (gone && !gone.sub && arr[si] && arr[si].sub) arr[si].sub = false;   // 後面嘅接替者升做正選
+            renderTables(); calculate();
+        }
         function changeSeat(ti, si) {
             openPicker({
-                title: '更正此座位人選', hint: '只係改人，贏輸數字保持不變。', multi: false, disabled: seatBlocker(ti, si),
+                title: P(S.tables[ti].seats[si].personId) ? '更正此座位人選' : '補位：揀人入座', hint: '只係改人，贏輸數字保持不變。', multi: false, disabled: seatBlocker(ti, si),
                 onDone: ids => { S.tables[ti].seats[si].personId = ids[0]; renderTables(); calculate(); }
             });
         }
@@ -1125,9 +1159,9 @@
         function renderDailyChart(c) {
             const el = document.getElementById('daily-bars');
             const rows = [];
-            c.results.forEach((r, id) => { const p = P(id); if (p) rows.push([nameOf(p), Math.round(r.net * 100) / 100]); });
+            c.results.forEach((r, id) => { const p = P(id); if (p && tablesOf(id).length) rows.push([nameOf(p), Math.round(r.net * 100) / 100]); });
             rows.sort((a, b) => b[1] - a[1]);
-            if (!rows.length) { el.innerHTML = '<p class="text-slate-500 italic text-sm">未有結算資料。</p>'; return; }
+            if (!rows.length) { el.innerHTML = '<p class="text-slate-500 italic text-sm">未有打麻雀嘅人。</p>'; return; }
             const W = 358, rowH = 58, H = rows.length * rowH + 8, cx = W / 2;
             const maxAbs = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, half = cx - 72;
             let out = `<svg viewBox="0 0 ${W} ${H}"><line x1="${cx}" x2="${cx}" y1="0" y2="${H}" stroke="#8a8774" stroke-width="1.4"/>`;
@@ -1200,30 +1234,37 @@
                 `<div class="ch-stat"><small>累積總分</small><b class="${k(total)}">${f(total)}</b></div>
                  <div class="ch-stat"><small>最佳一日</small><b class="ch-pos">${f(Math.max(...daily))}</b></div>
                  <div class="ch-stat"><small>最差一日</small><b class="ch-neg">${f(Math.min(...daily))}</b></div>`;
-            const W = 358, H = 260, L = 44, R = 14, T = 22, B = 34, n = cum.length;
+            const host = document.getElementById('line-chart');
+            const n = cum.length, L = 44, R = 18, T = 24, B = 34, H = 260;
+            const avail = Math.max(host.clientWidth - L, 240);
+            const PW = Math.max(avail, n * 58 + R);                 // 日期多就加闊，左右滑動
             const lo = Math.min(0, ...cum), hi = Math.max(0, ...cum);
             const pad = (hi - lo) * 0.12 || 10, y0 = lo - pad, y1 = hi + pad;
-            const X = i => n === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (n - 1), Y = v => T + (H - T - B) * (y1 - v) / (y1 - y0);
+            const X = i => n === 1 ? (PW - R) / 2 : 29 + (PW - R - 29) * i / (n - 1), Y = v => T + (H - T - B) * (y1 - v) / (y1 - y0);
             const raw = (y1 - y0) / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= raw);
-            let g = '';
+            let g = '', ylab = '';
             for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
                 const vv = Math.round(v * 100) / 100;
-                g += `<line x1="${L}" x2="${W - R}" y1="${Y(vv)}" y2="${Y(vv)}" stroke="${vv === 0 ? '#8a8774' : '#e6e0cb'}" stroke-width="${vv === 0 ? 1.4 : 1}" ${vv === 0 ? 'stroke-dasharray="4 3"' : ''}/><text x="${L - 6}" y="${Y(vv) + 4}" text-anchor="end" font-size="11" fill="#8a8774">${vv}</text>`;
+                g += `<line x1="0" x2="${PW}" y1="${Y(vv)}" y2="${Y(vv)}" stroke="${vv === 0 ? '#8a8774' : '#e6e0cb'}" stroke-width="${vv === 0 ? 1.4 : 1}" ${vv === 0 ? 'stroke-dasharray="4 3"' : ''}/>`;
+                ylab += `<text x="${L - 6}" y="${Y(vv) + 4}" text-anchor="end" font-size="11" fill="#8a8774">${vv}</text>`;
             }
             const pts = cum.map((v, i) => [X(i), Y(v)]);
             const path = pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
             const area = path + ` L${X(n - 1)} ${Y(0)} L${X(0)} ${Y(0)} Z`;
             let dots = '', lab = '';
-            const every = Math.ceil(n / 8);
             cum.forEach((v, i) => {
                 dots += `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === n - 1 ? 5.5 : 3.8}" fill="${i === n - 1 ? '#0f4c3a' : '#fffefa'}" stroke="#1f7a54" stroke-width="2"/>`;
-                if (i % every === 0 || i === n - 1) lab += `<text x="${X(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#5f5e4e">${hist[i].date.slice(5).replace('-', '/')}</text>`;
+                lab += `<text x="${X(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#5f5e4e">${hist[i].date.slice(5).replace('-', '/')}</text>`;
             });
             const last = pts[n - 1];
-            document.getElementById('line-chart').innerHTML =
-                `<svg viewBox="0 0 ${W} ${H}"><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f8c63" stop-opacity=".28"/><stop offset="1" stop-color="#2f8c63" stop-opacity=".02"/></linearGradient></defs>
+            host.innerHTML =
+                `<div style="display:flex"><svg width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" style="flex:none">${ylab}</svg>
+                 <div id="line-scroll" style="overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch"><svg width="${PW}" height="${H}" viewBox="0 0 ${PW} ${H}" style="max-width:none">
+                 <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f8c63" stop-opacity=".28"/><stop offset="1" stop-color="#2f8c63" stop-opacity=".02"/></linearGradient></defs>
                  ${g}<path d="${area}" fill="url(#ag)"/><path d="${path}" fill="none" stroke="#1f7a54" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${dots}${lab}
-                 <text x="${Math.min(last[0], W - R - 2)}" y="${last[1] - 12}" text-anchor="end" font-size="13" font-weight="700" fill="${total < 0 ? '#b3261e' : '#15803d'}">${f(total)}</text></svg>`;
+                 <text x="${Math.min(last[0], PW - R - 2)}" y="${last[1] - 12}" text-anchor="end" font-size="13" font-weight="700" fill="${total < 0 ? '#b3261e' : '#15803d'}">${f(total)}</text></svg></div></div>
+                 ${PW > avail ? '<p style="text-align:center;font-size:11px;color:#8a8774;margin-top:4px">← 左右滑動睇每日走勢 →</p>' : ''}`;
+            const sc = document.getElementById('line-scroll'); if (sc) sc.scrollLeft = sc.scrollWidth;   // 預設行到最新一日
         }
 
         // ---------- 計算 (邏輯同原本一樣，只係改用人員 ID) ----------
@@ -1244,6 +1285,8 @@
 
             S.tables.forEach((table, ti) => {
                 let tableWlSum = 0;
+                const vac = table.seats.filter((s, si) => !P(s.personId) && !(table.seats[si + 1] && table.seats[si + 1].sub)).length;
+                if (vac) tableErrors[ti] = `第 ${ti + 1} 台有 ${vac} 個空位，請撳空位嘅 ＋ 揀人補位 (一台要有 4 個人)。`;
                 table.seats.forEach(s => {
                     const p = P(s.personId);
                     if (!named(p)) return;
@@ -1255,7 +1298,7 @@
                 });
                 totalCommission += table.commission;
                 const tableCheck = tableWlSum + table.commission;
-                if (Math.abs(tableCheck) > 0.01) {
+                if (Math.abs(tableCheck) > 0.01 && !tableErrors[ti]) {
                     const r2 = v => Number(v.toFixed(2));
                     tableErrors[ti] = `第 ${ti + 1} 台數目唔對路！玩家贏輸總和 (${r2(tableWlSum)}) + 抽水 (${r2(table.commission)}) = ${r2(tableCheck)} (必須剛好等於 0)`;
                 }
@@ -1479,7 +1522,7 @@
 
             const tablesHtml = S.tables.map((t, ti) => `
                 <div class="card inner"><div class="row"><h3>第 ${ti + 1} 台</h3><span class="muted">抽水：$${(+t.commission).toFixed(2)}</span></div>
-                ${t.seats.map(s => { const p = P(s.personId); return `<div class="seat ${s.sub ? 'sub' : ''}">${rptAv(p, 46)}<span class="grow">${esc(nameOf(p))}${s.sub ? ' <span class="muted">(換人時段)</span>' : ''}</span><b class="${cls(s.wl)}">${money(s.wl, true)}</b></div>`; }).join('')}
+                ${t.seats.map(s => { const p = P(s.personId); return `<div class="seat ${s.sub ? 'sub' : ''}">${rptAv(p, 46)}<span class="grow">${p ? esc(nameOf(p)) : '（空位）'}${s.sub ? ' <span class="muted">(換人時段)</span>' : ''}</span><b class="${cls(s.wl)}">${money(s.wl, true)}</b></div>`; }).join('')}
                 ${c.tableErrors[ti] ? `<div class="err">${esc(c.tableErrors[ti])}</div>` : ''}</div>`).join('') || '<span class="muted">（未有麻雀台）</span>';
 
             let rows = '';
@@ -1622,6 +1665,53 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
             } finally {
                 if (btn) { btn.disabled = false; btn.innerText = old; }
             }
+        }
+
+        // ---------- 匯出 / 匯入 ----------
+        function openData() { const el = document.getElementById('data-modal'); el.classList.remove('hidden'); el.classList.add('flex'); }
+        function closeData() { const el = document.getElementById('data-modal'); el.classList.add('hidden'); el.classList.remove('flex'); }
+        async function exportData() {
+            const pad = n => String(n).padStart(2, '0'), now = new Date();
+            const name = `Mahjong-Backup_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
+            const text = JSON.stringify({ app: 'mahjong-calc', version: 1, exportedAt: now.toISOString(), data: S });
+            const cap = window.Capacitor;
+            if (cap && cap.isNativePlatform && cap.isNativePlatform() && cap.registerPlugin) {
+                try {
+                    const Fs = cap.Plugins.Filesystem || cap.registerPlugin('Filesystem');
+                    const Sh = cap.Plugins.Share || cap.registerPlugin('Share');
+                    const w = await Fs.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+                    await Sh.share({ files: [w.uri] });
+                } catch (e) { if (!(e && /cancel/i.test(String(e.message || e)))) alert('匯出失敗：' + (e && e.message ? e.message : e)); }
+                return;
+            }
+            const blob = new Blob([text], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        }
+        function importData(input) {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (!f) return;
+            const rd = new FileReader();
+            rd.onload = () => {
+                let d;
+                try {
+                    const j = JSON.parse(rd.result);
+                    d = j && j.app === 'mahjong-calc' ? j.data : null;
+                    if (!d || !Array.isArray(d.people) || !Array.isArray(d.tables)) throw new Error('bad');
+                } catch (e) { alert('匯入失敗：呢個唔係有效嘅備份檔。'); return; }
+                closeData();
+                openConfirm('確定匯入？', `會用備份檔取代呢部機現有嘅全部資料（${d.people.length} 位人員、${(d.history || []).length} 日累積統計），無法還原。`, () => {
+                    S = Object.assign(emptyState(), d);
+                    if (!Array.isArray(S.history)) S.history = [];
+                    save(); renderAll();
+                    alert('匯入完成。');
+                }, '匯入');
+            };
+            rd.onerror = () => alert('讀取檔案失敗。');
+            rd.readAsText(f);
         }
 
         // ---------- 資料管理 ----------
