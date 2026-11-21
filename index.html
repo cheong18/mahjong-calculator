@@ -218,7 +218,6 @@
 
         <!-- 資料管理 -->
         <div class="flex justify-center gap-4 text-xs text-slate-400">
-            <button onclick="loadSample()" class="underline">還原範例資料</button>
             <button onclick="clearAll()" class="underline">清空全部</button>
             <button onclick="openData()" class="underline">匯出 / 匯入</button>
         </div>
@@ -1733,10 +1732,9 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
             renderAll();
         }
         function clearAll() {
-            if (!confirm('清空全部資料？所有人員、相片同記錄都會刪除，無法還原。（已儲存嘅累積統計會保留）')) return;
-            const keepHistory = S.history || [];
+            if (!confirm('清空全部資料？所有人員、相片、麻雀枱、食飯記錄同累積統計都會刪除，要重新輸入所有資料，無法還原。')) return;
             S = emptyState();
-            S.history = keepHistory;
+            save();
             renderAll();
         }
 
