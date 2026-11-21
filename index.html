@@ -366,8 +366,8 @@
                     const d = JSON.parse(raw);
                     if (d && Array.isArray(d.people) && Array.isArray(d.tables)) { S = Object.assign(emptyState(), d); return; }
                 }
-            } catch (e) { /* 讀唔到就用範例 */ }
-            sampleState();
+            } catch (e) { /* 讀唔到就由空白開始 */ }
+            S = emptyState();
         }
         function save() {
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) { /* 儲存失敗唔影響使用 */ }
