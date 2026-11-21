@@ -49,6 +49,16 @@
         input:focus, select:focus { outline: none; border-color: #2f8c63; box-shadow: 0 0 0 3px rgba(47,140,99,.22); }
         /* 底部彈出視窗 */
         #sheet > div, #picker > div, #confirm > div, #cropper > div { background: #fffefa; }
+
+        .ghost-btn { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #b9dfc9; background: #eaf4ee; color: #0f4c3a; font-weight: 600; font-size: 14px; }
+        .ghost-btn:active { background: #dcefe3; }
+        .sign-btn { flex: none; width: 40px; border-radius: 8px; border: 1px solid #d9d3bb; background: #efebdc; color: #37382d; font-weight: 700; font-size: 16px; }
+        .sign-btn:active { background: #e2dcc6; }
+        .ch-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+        .ch-stat { background: #f4f0e2; border: 1px solid #e6e0cb; border-radius: 12px; padding: 8px 4px; text-align: center; }
+        .ch-stat small { display: block; font-size: 11px; color: #5f5e4e; } .ch-stat b { font-size: 17px; }
+        .ch-pos { color: #15803d; } .ch-neg { color: #b3261e; }
+        #line-chart svg, #daily-bars svg { display: block; width: 100%; height: auto; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6">
@@ -87,6 +97,7 @@
             <p class="text-sm text-slate-600">總人數：<span id="stat-people" class="font-bold text-slate-800">0</span> 人</p>
 
             <div id="people-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1"></div>
+            <button onclick="openStats()" class="ghost-btn">📈 累積統計</button>
         </div>
 
         <!-- 設定區 -->
@@ -187,10 +198,21 @@
                 </ul>
             </div>
 
+            <!-- 當日積分圖 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="font-semibold text-slate-800 mb-3">📊 當日積分圖</h3>
+                <div id="daily-bars"></div>
+                <div class="flex justify-center gap-4 text-xs text-slate-500 mt-1.5">
+                    <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#c0392b;margin-right:4px"></i>負數</span>
+                    <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2f8c63;margin-right:4px"></i>正數</span>
+                </div>
+            </div>
+
             <!-- 複製按鈕 -->
             <button id="share-btn" onclick="shareReportPdf()" class="w-full bg-indigo-800 text-white py-3 rounded-xl font-medium hover:bg-indigo-900 transition shadow-sm disabled:opacity-60">
                 📤 一鍵分享完整結算報告 (PDF)
             </button>
+            <button onclick="saveToday()" class="ghost-btn">💾 儲存今日積分</button>
             <button onclick="copyReport()" class="w-full text-slate-500 text-sm underline">只複製文字摘要</button>
         </div>
 
@@ -227,6 +249,17 @@
                 <button onclick="closePicker()" class="flex-1 py-2.5 rounded-xl border text-slate-600">取消</button>
                 <button id="picker-ok" onclick="pickerConfirm()" class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-medium disabled:opacity-40">確定</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 累積統計視窗 -->
+    <div id="stats-modal" class="hidden fixed inset-0 z-50 bg-black/40 items-end sm:items-center justify-center" onclick="if (event.target === this) closeStats()">
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom));">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-semibold text-slate-800 text-lg">📈 累積統計</h3>
+                <button onclick="closeStats()" class="text-slate-400 text-xl px-2">✕</button>
+            </div>
+            <div id="stats-body"></div>
         </div>
     </div>
 
@@ -280,7 +313,7 @@
 
         // ---------- 資料 ----------
         function emptyState() {
-            return { seq: 1, people: [], tables: [], pureDinners: [], paidDinners: [], dinnerMode: 'subsidy' };
+            return { seq: 1, people: [], tables: [], pureDinners: [], paidDinners: [], dinnerMode: 'subsidy', history: [] };
         }
         function uid(prefix) { return prefix + (S.seq++); }
         function seat(personId, wl, sub) { return { personId: personId, wl: wl, sub: !!sub }; }
@@ -297,7 +330,9 @@
         }
 
         function sampleState() {
+            const keepHistory = (S && S.history) || [];
             S = emptyState();
+            S.history = keepHistory;
             const id = {};
             ['Sam', 'Eddie', 'Garry', 'Janet', 'Ada', 'Agnes', 'Michelle', 'Venus', 'Homan'].forEach(n => { id[n] = addPerson(n); });
             S.tables = [
@@ -526,6 +561,7 @@
         function pickerTap(id) {
             if (!pk) return;
             if (!pk.multi) {
+                if (pk.disabled && pk.disabled(id)) return;
                 const cb = pk.onDone;
                 closePicker();
                 cb([id]);
@@ -998,7 +1034,7 @@
                         <button onclick="changeSeat(${ti}, ${si})" class="shrink-0" title="更正此座位人選">${avatarHtml(p, 'sm')}</button>
                         <div class="flex-1 min-w-0 space-y-1">
                             <button onclick="changeSeat(${ti}, ${si})" class="block w-full text-left truncate text-sm font-medium" title="更正此座位人選">${esc(nameOf(p))}</button>
-                            <input type="number" step="any" autocomplete="off" value="${s.wl}" placeholder="贏輸" class="w-full px-3 py-1 border rounded-lg bg-white" onbeforeinput="numGuard(event)" oninput="numInputSigned(this); updateSeatWl(${ti}, ${si}, this.value)" onblur="numBlur(this)" onfocus="selectAll(this)">
+                            <div class="flex gap-1.5"><button type="button" class="sign-btn" onclick="toggleSign(this, ${ti}, ${si})" title="正負號切換">±</button><input type="text" inputmode="decimal" autocomplete="off" value="${s.wl}" placeholder="贏輸" class="w-full min-w-0 px-3 py-1 border rounded-lg bg-white" oninput="numInput(this, true); updateSeatWl(${ti}, ${si}, this.value)" onfocus="selectAll(this)"></div>
                         </div>
                         <div class="flex flex-col items-center gap-1 shrink-0">
                             <button onclick="swapSeat(${ti}, ${si})" class="px-2 py-1" title="中途換人">🔄</button>
@@ -1021,9 +1057,21 @@
                 </div>`;
             }).join('');
         }
+        // 已入座而未被換走嘅人，唔可以再入其他座位 (被換走嘅人先可以去第二台或同枱其他位置)
+        function seatBlocker(exTi, exSi) {
+            const active = new Map();
+            S.tables.forEach((t, ti) => t.seats.forEach((s, si) => {
+                if (ti === exTi && si === exSi) return;
+                const next = t.seats[si + 1];
+                if (next && next.sub) return;                 // 已被換走
+                if (!active.has(s.personId)) active.set(s.personId, ti + 1);
+            }));
+            return id => active.has(id) ? `已入座第${active.get(id)}台` : '';
+        }
         function addTable() {
             openPicker({
-                title: '新增麻雀台：點選入座人員', hint: '一定要揀齊 4 位，按你點選嘅次序入座。', multi: true, exact: 4,
+                title: '新增麻雀台：點選入座人員', hint: '一定要揀齊 4 位，按你點選嘅次序入座。已入座嘅人要先被換走先可以揀。', multi: true, exact: 4,
+                disabled: seatBlocker(-1, -1),
                 onDone: ids => {
                     S.tables.push({ id: uid('t'), commission: 0, seats: ids.map(id => seat(id, 0)) });
                     renderTables(); calculate();
@@ -1031,8 +1079,11 @@
             });
         }
         let confirmCb = null;
-        function openConfirm(title, msg, onOk) {
+        function openConfirm(title, msg, onOk, okLabel, safe) {
             confirmCb = onOk;
+            const ok = document.getElementById('confirm-ok');
+            ok.innerText = okLabel || '刪除';
+            ok.style.background = safe ? '#1f7a54' : '';
             document.getElementById('confirm-title').innerText = title;
             document.getElementById('confirm-msg').innerText = msg;
             const el = document.getElementById('confirm');
@@ -1050,20 +1101,131 @@
             });
         }
         function updateTableCommission(ti, v) { S.tables[ti].commission = parseFloat(v) || 0; calculate(); }
+        function toggleSign(btn, ti, si) {
+            const el = btn.nextElementSibling;
+            const v = el.value;
+            el.value = v.startsWith('-') ? v.slice(1) : '-' + v;
+            updateSeatWl(ti, si, el.value);
+        }
         function updateSeatWl(ti, si, v) { S.tables[ti].seats[si].wl = parseFloat(v) || 0; calculate(); }
         function removeSeat(ti, si) { S.tables[ti].seats.splice(si, 1); renderTables(); calculate(); }
         function changeSeat(ti, si) {
             openPicker({
-                title: '更正此座位人選', hint: '只係改人，贏輸數字保持不變。', multi: false,
+                title: '更正此座位人選', hint: '只係改人，贏輸數字保持不變。', multi: false, disabled: seatBlocker(ti, si),
                 onDone: ids => { S.tables[ti].seats[si].personId = ids[0]; renderTables(); calculate(); }
             });
         }
         function swapSeat(ti, si) {
             openPicker({
-                title: '中途換人：揀接替嘅人', hint: '原本座位嘅贏輸保留，新增一個接替時段。', multi: false,
+                title: '中途換人：揀接替嘅人', hint: '原本座位嘅贏輸保留，新增一個接替時段。', multi: false, disabled: seatBlocker(-1, -1),
                 onDone: ids => { S.tables[ti].seats.splice(si + 1, 0, seat(ids[0], 0, true)); renderTables(); calculate(); }
             });
         }
+        // ---------- 當日積分圖 (左負右正) ----------
+        function renderDailyChart(c) {
+            const el = document.getElementById('daily-bars');
+            const rows = [];
+            c.results.forEach((r, id) => { const p = P(id); if (p) rows.push([nameOf(p), Math.round(r.net * 100) / 100]); });
+            rows.sort((a, b) => b[1] - a[1]);
+            if (!rows.length) { el.innerHTML = '<p class="text-slate-500 italic text-sm">未有結算資料。</p>'; return; }
+            const W = 358, rowH = 58, H = rows.length * rowH + 8, cx = W / 2;
+            const maxAbs = Math.max(...rows.map(r => Math.abs(r[1]))) || 1, half = cx - 72;
+            let out = `<svg viewBox="0 0 ${W} ${H}"><line x1="${cx}" x2="${cx}" y1="0" y2="${H}" stroke="#8a8774" stroke-width="1.4"/>`;
+            rows.forEach(([n, v], i) => {
+                const y = 4 + i * rowH, by = y + 24, w = half * Math.abs(v) / maxAbs;
+                out += `<text x="${cx}" y="${y + 16}" text-anchor="middle" font-size="14" font-weight="600" fill="#25261e" stroke="#fffefa" stroke-width="4" paint-order="stroke">${esc(n)}</text>`;
+                if (v > 0) out += `<rect x="${cx}" y="${by}" width="${w}" height="22" rx="5" fill="#2f8c63"/><text x="${cx + w + 6}" y="${by + 16}" font-size="14" font-weight="700" fill="#15803d">+${v}</text>`;
+                else if (v < 0) out += `<rect x="${cx - w}" y="${by}" width="${w}" height="22" rx="5" fill="#c0392b"/><text x="${cx - w - 6}" y="${by + 16}" text-anchor="end" font-size="14" font-weight="700" fill="#b3261e">${v}</text>`;
+                else out += `<text x="${cx + 8}" y="${by + 16}" font-size="14" fill="#8a8774">0</text>`;
+            });
+            el.innerHTML = out + '</svg>';
+        }
+
+        // ---------- 儲存今日積分 ----------
+        function todayStr() {
+            const d = new Date(), z = n => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+        }
+        function saveToday() {
+            const c = compute();
+            const scores = {};
+            c.results.forEach((r, id) => { const p = P(id); if (p) scores[nameOf(p)] = Math.round(r.net * 100) / 100; });
+            if (!Object.keys(scores).length) { alert('未有結算資料可以儲存。'); return; }
+            const date = todayStr();
+            const exists = (S.history || []).some(h => h.date === date);
+            openConfirm('確定儲存？',
+                `會將今日 (${date}) ${Object.keys(scores).length} 位嘅積分儲存，用嚟做累積統計。` + (exists ? '今日已有記錄，會被取代。' : ''),
+                () => {
+                    S.history = (S.history || []).filter(h => h.date !== date);
+                    S.history.push({ date: date, scores: scores });
+                    S.history.sort((a, b) => a.date < b.date ? -1 : 1);
+                    save();
+                }, '儲存', true);
+        }
+
+        // ---------- 累積統計 ----------
+        function openStats() {
+            const el = document.getElementById('stats-modal');
+            el.classList.remove('hidden'); el.classList.add('flex');
+            renderStats();
+        }
+        function closeStats() {
+            const el = document.getElementById('stats-modal');
+            el.classList.add('hidden'); el.classList.remove('flex');
+        }
+        function statsNames() {
+            const set = new Set();
+            (S.history || []).forEach(h => Object.keys(h.scores).forEach(n => set.add(n)));
+            return Array.from(set);
+        }
+        function renderStats(keep) {
+            const body = document.getElementById('stats-body');
+            const names = statsNames();
+            if (!names.length) {
+                body.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">未有已儲存嘅記錄。<br>喺結算報告撳「💾 儲存今日積分」後，就會有累積統計。</p>';
+                return;
+            }
+            const cur = names.includes(keep) ? keep : names[0];
+            body.innerHTML = `<select id="stats-who" class="w-full px-3 py-2.5 border rounded-xl text-base" onchange="renderStats(this.value)">${names.map(n => `<option ${n === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+                <div id="line-stats" class="ch-stats"></div><div id="line-chart"></div>`;
+            drawLine(cur);
+        }
+        function drawLine(name) {
+            const hist = S.history;
+            const daily = hist.map(h => h.scores[name] || 0);
+            let acc = 0; const cum = daily.map(v => Math.round((acc += v) * 100) / 100);
+            const total = cum[cum.length - 1];
+            const f = n => (n > 0 ? '+' : '') + n, k = n => n > 0 ? 'ch-pos' : n < 0 ? 'ch-neg' : '';
+            document.getElementById('line-stats').innerHTML =
+                `<div class="ch-stat"><small>累積總分</small><b class="${k(total)}">${f(total)}</b></div>
+                 <div class="ch-stat"><small>最佳一日</small><b class="ch-pos">${f(Math.max(...daily))}</b></div>
+                 <div class="ch-stat"><small>最差一日</small><b class="ch-neg">${f(Math.min(...daily))}</b></div>`;
+            const W = 358, H = 260, L = 44, R = 14, T = 22, B = 34, n = cum.length;
+            const lo = Math.min(0, ...cum), hi = Math.max(0, ...cum);
+            const pad = (hi - lo) * 0.12 || 10, y0 = lo - pad, y1 = hi + pad;
+            const X = i => n === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (n - 1), Y = v => T + (H - T - B) * (y1 - v) / (y1 - y0);
+            const raw = (y1 - y0) / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= raw);
+            let g = '';
+            for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
+                const vv = Math.round(v * 100) / 100;
+                g += `<line x1="${L}" x2="${W - R}" y1="${Y(vv)}" y2="${Y(vv)}" stroke="${vv === 0 ? '#8a8774' : '#e6e0cb'}" stroke-width="${vv === 0 ? 1.4 : 1}" ${vv === 0 ? 'stroke-dasharray="4 3"' : ''}/><text x="${L - 6}" y="${Y(vv) + 4}" text-anchor="end" font-size="11" fill="#8a8774">${vv}</text>`;
+            }
+            const pts = cum.map((v, i) => [X(i), Y(v)]);
+            const path = pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+            const area = path + ` L${X(n - 1)} ${Y(0)} L${X(0)} ${Y(0)} Z`;
+            let dots = '', lab = '';
+            const every = Math.ceil(n / 8);
+            cum.forEach((v, i) => {
+                dots += `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === n - 1 ? 5.5 : 3.8}" fill="${i === n - 1 ? '#0f4c3a' : '#fffefa'}" stroke="#1f7a54" stroke-width="2"/>`;
+                if (i % every === 0 || i === n - 1) lab += `<text x="${X(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#5f5e4e">${hist[i].date.slice(5).replace('-', '/')}</text>`;
+            });
+            const last = pts[n - 1];
+            document.getElementById('line-chart').innerHTML =
+                `<svg viewBox="0 0 ${W} ${H}"><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f8c63" stop-opacity=".28"/><stop offset="1" stop-color="#2f8c63" stop-opacity=".02"/></linearGradient></defs>
+                 ${g}<path d="${area}" fill="url(#ag)"/><path d="${path}" fill="none" stroke="#1f7a54" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${dots}${lab}
+                 <text x="${Math.min(last[0], W - R - 2)}" y="${last[1] - 12}" text-anchor="end" font-size="13" font-weight="700" fill="${total < 0 ? '#b3261e' : '#15803d'}">${f(total)}</text></svg>`;
+        }
+
         // ---------- 計算 (邏輯同原本一樣，只係改用人員 ID) ----------
         function compute() {
             const errors = [];
@@ -1249,6 +1411,7 @@
             c.results.forEach((r, id) => { byName[nameOf(P(id))] = r; });
             window.currentResults = byName;
             window.currentTransactions = txs.map(t => ({ from: t.from.name, to: t.to.name, amount: t.amount }));
+            renderDailyChart(c);
             window.lastCalc = {
                 c: c,
                 txs: window.currentTransactions,
@@ -1463,13 +1626,15 @@ ${c.errors.length ? `<div class="err">${c.errors.map(esc).join('<br>')}</div>` :
 
         // ---------- 資料管理 ----------
         function loadSample() {
-            if (!confirm('還原成範例資料？目前所有人員、相片同記錄會被取代。')) return;
+            if (!confirm('還原成範例資料？目前所有人員、相片同記錄會被取代。（已儲存嘅累積統計會保留）')) return;
             sampleState();
             renderAll();
         }
         function clearAll() {
-            if (!confirm('清空全部資料？所有人員、相片同記錄都會刪除，無法還原。')) return;
+            if (!confirm('清空全部資料？所有人員、相片同記錄都會刪除，無法還原。（已儲存嘅累積統計會保留）')) return;
+            const keepHistory = S.history || [];
             S = emptyState();
+            S.history = keepHistory;
             renderAll();
         }
 
