@@ -1569,7 +1569,6 @@ h2{font-size:21px;margin:0 0 12px;color:#0f4c3a}h3{font-size:19px;margin:0;color
 
             return `<!DOCTYPE html><html lang="zh-HK"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>麻雀與食飯結算報告 ${dateStr}</title><style>${css}</style></head><body><div class="wrap">
 <div class="hero"><h1>🀄 麻雀與食飯抽水結算報告</h1><p>報告日期：${dateStr}</p></div>
-<div class="card"><h2>🐷 人數設定</h2><p class="muted">麻雀枱 ${S.tables.length} 台 · 齋食飯 ${S.pureDinners.length} 人 · 總人數 ${S.people.filter(named).length} 人</p><div class="units">${peopleHtml}</div></div>
 <div class="card"><h2>🍲 齋食飯名單</h2><div>${pureHtml}</div><p class="muted">飯錢計算方法：${esc(modeLabel)}</p></div>
 <div class="card"><h2>💰 已付食飯錢記錄</h2>${paidHtml}<div class="row" style="border-top:1px solid #e2e8f0;padding-top:8px"><span class="muted">食飯錢總額</span><b>$${c.totalDinner.toFixed(2)}</b></div></div>
 <div class="card"><h2>🀄 麻雀台資料</h2>${tablesHtml}</div>
