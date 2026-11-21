@@ -1068,7 +1068,7 @@
                         </div>
                         <div class="flex flex-col items-center gap-1 shrink-0">
                             <button onclick="swapSeat(${ti}, ${si})" class="px-2 py-1" title="中途換人">🔄</button>
-                            <button onclick="removeSeat(${ti}, ${si})" class="text-red-400 hover:text-red-600 font-bold px-2 py-1" title="刪除此時段/玩家">×</button>
+                            <button onclick="deleteSeatPerson(${ti}, ${si})" class="text-red-400 hover:text-red-600 font-bold px-2 py-1" title="刪除此時段/玩家">×</button>
                         </div>
                     </div>`;
                 }).join('');
@@ -1138,6 +1138,18 @@
             updateSeatWl(ti, si, el.value);
         }
         function updateSeatWl(ti, si, v) { S.tables[ti].seats[si].wl = parseFloat(v) || 0; calculate(); }
+        // 座位上撳 ×：先問確認；正選座位刪咗之後留空位 (＋ 補人)，換人時段就直接移除
+        function deleteSeatPerson(ti, si) {
+            const st = S.tables[ti].seats[si];
+            const name = nameOf(P(st.personId));
+            const msg = st.sub ? '呢個換人時段同佢嘅贏輸記錄會被移除，刪除後無法還原。'
+                : '佢嘅贏輸記錄會清走，座位會變成空位，可以撳 ＋ 揀人補位。';
+            openConfirm(`刪除「${name}」？`, `第 ${ti + 1} 台：${msg}`, () => {
+                if (st.sub) { removeSeat(ti, si); return; }
+                st.personId = null; st.wl = 0;
+                renderTables(); calculate();
+            });
+        }
         function removeSeat(ti, si) {
             const arr = S.tables[ti].seats, gone = arr.splice(si, 1)[0];
             if (gone && !gone.sub && arr[si] && arr[si].sub) arr[si].sub = false;   // 後面嘅接替者升做正選
